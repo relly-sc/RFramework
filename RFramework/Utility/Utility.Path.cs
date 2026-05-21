@@ -50,7 +50,7 @@ namespace RFramework
             {
                 if (string.IsNullOrEmpty(directoryName))
                 {
-                    throw new FrameworkException("Directory name is invalid.");
+                    throw new RFrameworkException("Directory name is invalid.");
                 }
 
                 try

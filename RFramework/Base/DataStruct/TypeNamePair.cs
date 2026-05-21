@@ -31,7 +31,7 @@ namespace RFramework
         {
             if (type == null)
             {
-                throw new FrameworkException("Type is invalid.");
+                throw new RFrameworkException("Type is invalid.");
             }
 
             m_Type = type;
@@ -68,7 +68,7 @@ namespace RFramework
         {
             if (m_Type == null)
             {
-                throw new FrameworkException("Type is invalid.");
+                throw new RFrameworkException("Type is invalid.");
             }
 
             string typeName = m_Type.FullName;

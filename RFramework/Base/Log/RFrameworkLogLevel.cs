@@ -4,7 +4,7 @@ namespace RFramework
     /// <summary>
     /// 框架日志等级
     /// </summary>
-    public enum FrameworkLogLevel : byte
+    public enum RFrameworkLogLevel : byte
     {
         /// <summary>
         /// 调试。

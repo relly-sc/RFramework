@@ -1,10 +1,10 @@
-﻿
+
 namespace RFramework
 {
     /// <summary>
     /// 框架模块抽象类
     /// </summary>
-    internal abstract class FrameworkModule
+    internal abstract class RFrameworkModule
     {
         /// <summary>
         /// 获取游戏框架模块优先级。

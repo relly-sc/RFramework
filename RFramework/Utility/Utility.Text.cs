@@ -26,7 +26,7 @@ namespace RFramework
             {
                 if (format == null)
                 {
-                    throw new FrameworkException("Format is invalid.");
+                    throw new RFrameworkException("Format is invalid.");
                 }
 
                 CheckCachedStringBuilder();
@@ -46,7 +46,7 @@ namespace RFramework
             {
                 if (format == null)
                 {
-                    throw new FrameworkException("Format is invalid.");
+                    throw new RFrameworkException("Format is invalid.");
                 }
 
                 CheckCachedStringBuilder();
@@ -67,7 +67,7 @@ namespace RFramework
             {
                 if (format == null)
                 {
-                    throw new FrameworkException("Format is invalid.");
+                    throw new RFrameworkException("Format is invalid.");
                 }
 
                 CheckCachedStringBuilder();
@@ -86,12 +86,12 @@ namespace RFramework
             {
                 if (format == null)
                 {
-                    throw new FrameworkException("Format is invalid.");
+                    throw new RFrameworkException("Format is invalid.");
                 }
 
                 if (args == null)
                 {
-                    throw new FrameworkException("Args is invalid.");
+                    throw new RFrameworkException("Args is invalid.");
                 }
 
                 CheckCachedStringBuilder();

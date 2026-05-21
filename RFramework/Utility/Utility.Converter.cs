@@ -44,7 +44,7 @@ namespace RFramework
             {
                 if (ScreenDpi <= 0)
                 {
-                    throw new FrameworkException("You must set screen DPI first.");
+                    throw new RFrameworkException("You must set screen DPI first.");
                 }
 
                 return InchesToCentimeters * pixels / ScreenDpi;
@@ -59,7 +59,7 @@ namespace RFramework
             {
                 if (ScreenDpi <= 0)
                 {
-                    throw new FrameworkException("You must set screen DPI first.");
+                    throw new RFrameworkException("You must set screen DPI first.");
                 }
 
                 return CentimetersToInches * centimeters * ScreenDpi;
@@ -74,7 +74,7 @@ namespace RFramework
             {
                 if (ScreenDpi <= 0)
                 {
-                    throw new FrameworkException("You must set screen DPI first.");
+                    throw new RFrameworkException("You must set screen DPI first.");
                 }
 
                 return pixels / ScreenDpi;
@@ -89,7 +89,7 @@ namespace RFramework
             {
                 if (ScreenDpi <= 0)
                 {
-                    throw new FrameworkException("You must set screen DPI first.");
+                    throw new RFrameworkException("You must set screen DPI first.");
                 }
 
                 return inches * ScreenDpi;
@@ -127,12 +127,12 @@ namespace RFramework
             {
                 if (buffer == null)
                 {
-                    throw new FrameworkException("Buffer is invalid.");
+                    throw new RFrameworkException("Buffer is invalid.");
                 }
 
                 if (startIndex < 0 || startIndex + 1 > buffer.Length)
                 {
-                    throw new FrameworkException("Start index is invalid.");
+                    throw new RFrameworkException("Start index is invalid.");
                 }
 
                 buffer[startIndex] = value ? (byte)1 : (byte)0;
@@ -245,12 +245,12 @@ namespace RFramework
             {
                 if (buffer == null)
                 {
-                    throw new FrameworkException("Buffer is invalid.");
+                    throw new RFrameworkException("Buffer is invalid.");
                 }
 
                 if (startIndex < 0 || startIndex + 2 > buffer.Length)
                 {
-                    throw new FrameworkException("Start index is invalid.");
+                    throw new RFrameworkException("Start index is invalid.");
                 }
 
                 fixed (byte* valueRef = buffer)
@@ -366,12 +366,12 @@ namespace RFramework
             {
                 if (buffer == null)
                 {
-                    throw new FrameworkException("Buffer is invalid.");
+                    throw new RFrameworkException("Buffer is invalid.");
                 }
 
                 if (startIndex < 0 || startIndex + 4 > buffer.Length)
                 {
-                    throw new FrameworkException("Start index is invalid.");
+                    throw new RFrameworkException("Start index is invalid.");
                 }
 
                 fixed (byte* valueRef = buffer)
@@ -487,12 +487,12 @@ namespace RFramework
             {
                 if (buffer == null)
                 {
-                    throw new FrameworkException("Buffer is invalid.");
+                    throw new RFrameworkException("Buffer is invalid.");
                 }
 
                 if (startIndex < 0 || startIndex + 8 > buffer.Length)
                 {
-                    throw new FrameworkException("Start index is invalid.");
+                    throw new RFrameworkException("Start index is invalid.");
                 }
 
                 fixed (byte* valueRef = buffer)
@@ -727,12 +727,12 @@ namespace RFramework
             {
                 if (value == null)
                 {
-                    throw new FrameworkException("Value is invalid.");
+                    throw new RFrameworkException("Value is invalid.");
                 }
 
                 if (encoding == null)
                 {
-                    throw new FrameworkException("Encoding is invalid.");
+                    throw new RFrameworkException("Encoding is invalid.");
                 }
 
                 return encoding.GetBytes(value);
@@ -762,12 +762,12 @@ namespace RFramework
             {
                 if (value == null)
                 {
-                    throw new FrameworkException("Value is invalid.");
+                    throw new RFrameworkException("Value is invalid.");
                 }
 
                 if (encoding == null)
                 {
-                    throw new FrameworkException("Encoding is invalid.");
+                    throw new RFrameworkException("Encoding is invalid.");
                 }
 
                 return encoding.GetBytes(value, 0, value.Length, buffer, startIndex);
@@ -793,12 +793,12 @@ namespace RFramework
             {
                 if (value == null)
                 {
-                    throw new FrameworkException("Value is invalid.");
+                    throw new RFrameworkException("Value is invalid.");
                 }
 
                 if (encoding == null)
                 {
-                    throw new FrameworkException("Encoding is invalid.");
+                    throw new RFrameworkException("Encoding is invalid.");
                 }
 
                 return encoding.GetString(value);
@@ -828,12 +828,12 @@ namespace RFramework
             {
                 if (value == null)
                 {
-                    throw new FrameworkException("Value is invalid.");
+                    throw new RFrameworkException("Value is invalid.");
                 }
 
                 if (encoding == null)
                 {
-                    throw new FrameworkException("Encoding is invalid.");
+                    throw new RFrameworkException("Encoding is invalid.");
                 }
 
                 return encoding.GetString(value, startIndex, length);

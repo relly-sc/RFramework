@@ -4,7 +4,7 @@ namespace RFramework
     /// <summary>
     /// 框架日志类
     /// </summary>
-    public static partial class FrameworkLog
+    public static partial class RFrameworkLog
     {
         private static ILogHelper s_LogHelper = null;
 
@@ -28,7 +28,7 @@ namespace RFramework
                 return;
             }
 
-            s_LogHelper.Log(FrameworkLogLevel.Debug, message);
+            s_LogHelper.Log(RFrameworkLogLevel.Debug, message);
         }
 
         /// <summary>
@@ -42,7 +42,7 @@ namespace RFramework
                 return;
             }
 
-            s_LogHelper.Log(FrameworkLogLevel.Debug, message);
+            s_LogHelper.Log(RFrameworkLogLevel.Debug, message);
         }
 
         /// <summary>
@@ -57,7 +57,7 @@ namespace RFramework
                 return;
             }
 
-            s_LogHelper.Log(FrameworkLogLevel.Debug, Utility.Text.Format(format, arg0));
+            s_LogHelper.Log(RFrameworkLogLevel.Debug, Utility.Text.Format(format, arg0));
         }
 
         /// <summary>
@@ -73,7 +73,7 @@ namespace RFramework
                 return;
             }
 
-            s_LogHelper.Log(FrameworkLogLevel.Debug, Utility.Text.Format(format, arg0, arg1));
+            s_LogHelper.Log(RFrameworkLogLevel.Debug, Utility.Text.Format(format, arg0, arg1));
         }
 
         /// <summary>
@@ -90,7 +90,7 @@ namespace RFramework
                 return;
             }
 
-            s_LogHelper.Log(FrameworkLogLevel.Debug, Utility.Text.Format(format, arg0, arg1, arg2));
+            s_LogHelper.Log(RFrameworkLogLevel.Debug, Utility.Text.Format(format, arg0, arg1, arg2));
         }
 
         /// <summary>
@@ -105,7 +105,7 @@ namespace RFramework
                 return;
             }
 
-            s_LogHelper.Log(FrameworkLogLevel.Debug, Utility.Text.Format(format, args));
+            s_LogHelper.Log(RFrameworkLogLevel.Debug, Utility.Text.Format(format, args));
         }
 
         /// <summary>
@@ -119,7 +119,7 @@ namespace RFramework
                 return;
             }
 
-            s_LogHelper.Log(FrameworkLogLevel.Info, message);
+            s_LogHelper.Log(RFrameworkLogLevel.Info, message);
         }
 
         /// <summary>
@@ -133,7 +133,7 @@ namespace RFramework
                 return;
             }
 
-            s_LogHelper.Log(FrameworkLogLevel.Info, message);
+            s_LogHelper.Log(RFrameworkLogLevel.Info, message);
         }
 
         /// <summary>
@@ -148,7 +148,7 @@ namespace RFramework
                 return;
             }
 
-            s_LogHelper.Log(FrameworkLogLevel.Info, Utility.Text.Format(format, arg0));
+            s_LogHelper.Log(RFrameworkLogLevel.Info, Utility.Text.Format(format, arg0));
         }
 
         /// <summary>
@@ -164,7 +164,7 @@ namespace RFramework
                 return;
             }
 
-            s_LogHelper.Log(FrameworkLogLevel.Info, Utility.Text.Format(format, arg0, arg1));
+            s_LogHelper.Log(RFrameworkLogLevel.Info, Utility.Text.Format(format, arg0, arg1));
         }
 
         /// <summary>
@@ -181,7 +181,7 @@ namespace RFramework
                 return;
             }
 
-            s_LogHelper.Log(FrameworkLogLevel.Info, Utility.Text.Format(format, arg0, arg1, arg2));
+            s_LogHelper.Log(RFrameworkLogLevel.Info, Utility.Text.Format(format, arg0, arg1, arg2));
         }
 
         /// <summary>
@@ -196,7 +196,7 @@ namespace RFramework
                 return;
             }
 
-            s_LogHelper.Log(FrameworkLogLevel.Info, Utility.Text.Format(format, args));
+            s_LogHelper.Log(RFrameworkLogLevel.Info, Utility.Text.Format(format, args));
         }
 
         /// <summary>
@@ -210,7 +210,7 @@ namespace RFramework
                 return;
             }
 
-            s_LogHelper.Log(FrameworkLogLevel.Warning, message);
+            s_LogHelper.Log(RFrameworkLogLevel.Warning, message);
         }
 
         /// <summary>
@@ -224,7 +224,7 @@ namespace RFramework
                 return;
             }
 
-            s_LogHelper.Log(FrameworkLogLevel.Warning, message);
+            s_LogHelper.Log(RFrameworkLogLevel.Warning, message);
         }
 
         /// <summary>
@@ -239,7 +239,7 @@ namespace RFramework
                 return;
             }
 
-            s_LogHelper.Log(FrameworkLogLevel.Warning, Utility.Text.Format(format, arg0));
+            s_LogHelper.Log(RFrameworkLogLevel.Warning, Utility.Text.Format(format, arg0));
         }
 
         /// <summary>
@@ -255,7 +255,7 @@ namespace RFramework
                 return;
             }
 
-            s_LogHelper.Log(FrameworkLogLevel.Warning, Utility.Text.Format(format, arg0, arg1));
+            s_LogHelper.Log(RFrameworkLogLevel.Warning, Utility.Text.Format(format, arg0, arg1));
         }
 
         /// <summary>
@@ -272,7 +272,7 @@ namespace RFramework
                 return;
             }
 
-            s_LogHelper.Log(FrameworkLogLevel.Warning, Utility.Text.Format(format, arg0, arg1, arg2));
+            s_LogHelper.Log(RFrameworkLogLevel.Warning, Utility.Text.Format(format, arg0, arg1, arg2));
         }
 
         /// <summary>
@@ -287,7 +287,7 @@ namespace RFramework
                 return;
             }
 
-            s_LogHelper.Log(FrameworkLogLevel.Warning, Utility.Text.Format(format, args));
+            s_LogHelper.Log(RFrameworkLogLevel.Warning, Utility.Text.Format(format, args));
         }
 
         /// <summary>
@@ -301,7 +301,7 @@ namespace RFramework
                 return;
             }
 
-            s_LogHelper.Log(FrameworkLogLevel.Error, message);
+            s_LogHelper.Log(RFrameworkLogLevel.Error, message);
         }
 
         /// <summary>
@@ -315,7 +315,7 @@ namespace RFramework
                 return;
             }
 
-            s_LogHelper.Log(FrameworkLogLevel.Error, message);
+            s_LogHelper.Log(RFrameworkLogLevel.Error, message);
         }
 
         /// <summary>
@@ -330,7 +330,7 @@ namespace RFramework
                 return;
             }
 
-            s_LogHelper.Log(FrameworkLogLevel.Error, Utility.Text.Format(format, arg0));
+            s_LogHelper.Log(RFrameworkLogLevel.Error, Utility.Text.Format(format, arg0));
         }
 
         /// <summary>
@@ -346,7 +346,7 @@ namespace RFramework
                 return;
             }
 
-            s_LogHelper.Log(FrameworkLogLevel.Error, Utility.Text.Format(format, arg0, arg1));
+            s_LogHelper.Log(RFrameworkLogLevel.Error, Utility.Text.Format(format, arg0, arg1));
         }
 
         /// <summary>
@@ -363,7 +363,7 @@ namespace RFramework
                 return;
             }
 
-            s_LogHelper.Log(FrameworkLogLevel.Error, Utility.Text.Format(format, arg0, arg1, arg2));
+            s_LogHelper.Log(RFrameworkLogLevel.Error, Utility.Text.Format(format, arg0, arg1, arg2));
         }
 
         /// <summary>
@@ -378,7 +378,7 @@ namespace RFramework
                 return;
             }
 
-            s_LogHelper.Log(FrameworkLogLevel.Error, Utility.Text.Format(format, args));
+            s_LogHelper.Log(RFrameworkLogLevel.Error, Utility.Text.Format(format, args));
         }
 
         /// <summary>
@@ -392,7 +392,7 @@ namespace RFramework
                 return;
             }
 
-            s_LogHelper.Log(FrameworkLogLevel.Fatal, message);
+            s_LogHelper.Log(RFrameworkLogLevel.Fatal, message);
         }
 
         /// <summary>
@@ -406,7 +406,7 @@ namespace RFramework
                 return;
             }
 
-            s_LogHelper.Log(FrameworkLogLevel.Fatal, message);
+            s_LogHelper.Log(RFrameworkLogLevel.Fatal, message);
         }
 
         /// <summary>
@@ -421,7 +421,7 @@ namespace RFramework
                 return;
             }
 
-            s_LogHelper.Log(FrameworkLogLevel.Fatal, Utility.Text.Format(format, arg0));
+            s_LogHelper.Log(RFrameworkLogLevel.Fatal, Utility.Text.Format(format, arg0));
         }
 
         /// <summary>
@@ -437,7 +437,7 @@ namespace RFramework
                 return;
             }
 
-            s_LogHelper.Log(FrameworkLogLevel.Fatal, Utility.Text.Format(format, arg0, arg1));
+            s_LogHelper.Log(RFrameworkLogLevel.Fatal, Utility.Text.Format(format, arg0, arg1));
         }
 
         /// <summary>
@@ -454,7 +454,7 @@ namespace RFramework
                 return;
             }
 
-            s_LogHelper.Log(FrameworkLogLevel.Fatal, Utility.Text.Format(format, arg0, arg1, arg2));
+            s_LogHelper.Log(RFrameworkLogLevel.Fatal, Utility.Text.Format(format, arg0, arg1, arg2));
         }
 
         /// <summary>
@@ -469,7 +469,7 @@ namespace RFramework
                 return;
             }
 
-            s_LogHelper.Log(FrameworkLogLevel.Fatal, Utility.Text.Format(format, args));
+            s_LogHelper.Log(RFrameworkLogLevel.Fatal, Utility.Text.Format(format, args));
         }
 
     }

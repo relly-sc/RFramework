@@ -10,7 +10,7 @@ namespace RFramework
     /// 框架链表类
     /// </summary>
     /// <typeparam name="T">指定链表的元素类型</typeparam>
-    public sealed class FrameworkLinkedList<T> : ICollection<T>, IEnumerable<T>, ICollection, IEnumerable
+    public sealed class RFrameworkLinkedList<T> : ICollection<T>, IEnumerable<T>, ICollection, IEnumerable
     {
         /// <summary>
         /// 实际链表
@@ -24,7 +24,7 @@ namespace RFramework
         /// <summary>
         /// 初始化框架链表类的新实例
         /// </summary>
-        public FrameworkLinkedList()
+        public RFrameworkLinkedList()
         {
             m_LinkedList = new LinkedList<T>();
             m_CachedNodes = new Queue<LinkedListNode<T>>();
@@ -302,7 +302,7 @@ namespace RFramework
             LinkedListNode<T> first = m_LinkedList.First;
             if (first == null)
             {
-                throw new FrameworkException("First is invalid.");
+                throw new RFrameworkException("First is invalid.");
             }
 
             m_LinkedList.RemoveFirst();
@@ -317,7 +317,7 @@ namespace RFramework
             LinkedListNode<T> last = m_LinkedList.Last;
             if (last == null)
             {
-                throw new FrameworkException("Last is invalid.");
+                throw new RFrameworkException("Last is invalid.");
             }
 
             m_LinkedList.RemoveLast();
@@ -403,7 +403,7 @@ namespace RFramework
             {
                 if (linkedList == null)
                 {
-                    throw new FrameworkException("Linked list is invalid.");
+                    throw new RFrameworkException("Linked list is invalid.");
                 }
 
                 m_Enumerator = linkedList.GetEnumerator();

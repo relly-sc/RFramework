@@ -62,7 +62,7 @@ namespace RFramework
             {
                 if (s_JsonHelper == null)
                 {
-                    throw new FrameworkException("JSON helper is invalid.");
+                    throw new RFrameworkException("JSON helper is invalid.");
                 }
 
                 try
@@ -71,12 +71,12 @@ namespace RFramework
                 }
                 catch (Exception exception)
                 {
-                    if (exception is FrameworkException)
+                    if (exception is RFrameworkException)
                     {
                         throw;
                     }
 
-                    throw new FrameworkException(Text.Format("Can not convert to JSON with exception '{0}'.", exception.ToString()), exception);
+                    throw new RFrameworkException(Text.Format("Can not convert to JSON with exception '{0}'.", exception.ToString()), exception);
                 }
             }
 
@@ -90,7 +90,7 @@ namespace RFramework
             {
                 if (s_JsonHelper == null)
                 {
-                    throw new FrameworkException("JSON helper is invalid.");
+                    throw new RFrameworkException("JSON helper is invalid.");
                 }
 
                 try
@@ -99,12 +99,12 @@ namespace RFramework
                 }
                 catch (Exception exception)
                 {
-                    if (exception is FrameworkException)
+                    if (exception is RFrameworkException)
                     {
                         throw;
                     }
 
-                    throw new FrameworkException(Text.Format("Can not convert to object with exception '{0}'.", exception.ToString()), exception);
+                    throw new RFrameworkException(Text.Format("Can not convert to object with exception '{0}'.", exception.ToString()), exception);
                 }
             }
 
@@ -118,12 +118,12 @@ namespace RFramework
             {
                 if (s_JsonHelper == null)
                 {
-                    throw new FrameworkException("JSON helper is invalid.");
+                    throw new RFrameworkException("JSON helper is invalid.");
                 }
 
                 if (objectType == null)
                 {
-                    throw new FrameworkException("Object type is invalid.");
+                    throw new RFrameworkException("Object type is invalid.");
                 }
 
                 try
@@ -132,12 +132,12 @@ namespace RFramework
                 }
                 catch (Exception exception)
                 {
-                    if (exception is FrameworkException)
+                    if (exception is RFrameworkException)
                     {
                         throw;
                     }
 
-                    throw new FrameworkException(Text.Format("Can not convert to object with exception '{0}'.", exception.ToString()), exception);
+                    throw new RFrameworkException(Text.Format("Can not convert to object with exception '{0}'.", exception.ToString()), exception);
                 }
             }
         }

@@ -90,7 +90,7 @@ namespace RFramework
             {
                 if (typeof(T) != m_ReferenceType)
                 {
-                    throw new FrameworkException("Type is invalid.");
+                    throw new RFrameworkException("Type is invalid.");
                 }
 
                 m_UsingReferenceCount++;
@@ -130,7 +130,7 @@ namespace RFramework
                 {
                     if (m_EnableStrictCheck && m_References.Contains(reference))
                     {
-                        throw new FrameworkException("The reference has been released.");
+                        throw new RFrameworkException("The reference has been released.");
                     }
 
                     m_References.Enqueue(reference);//����
@@ -143,7 +143,7 @@ namespace RFramework
             {
                 if (typeof(T) != m_ReferenceType)
                 {
-                    throw new FrameworkException("Type is invalid.");
+                    throw new RFrameworkException("Type is invalid.");
                 }
 
                 lock (m_References)

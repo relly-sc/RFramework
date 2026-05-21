@@ -103,18 +103,18 @@ namespace RFramework
 
                 if (code == null)
                 {
-                    throw new FrameworkException("Code is invalid.");
+                    throw new RFrameworkException("Code is invalid.");
                 }
 
                 int codeLength = code.Length;
                 if (codeLength <= 0)
                 {
-                    throw new FrameworkException("Code length is invalid.");
+                    throw new RFrameworkException("Code length is invalid.");
                 }
 
                 if (startIndex < 0 || length < 0 || startIndex + length > bytes.Length)
                 {
-                    throw new FrameworkException("Start index or length is invalid.");
+                    throw new RFrameworkException("Start index or length is invalid.");
                 }
 
                 int codeIndex = startIndex % codeLength;

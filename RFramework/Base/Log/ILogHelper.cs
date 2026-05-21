@@ -11,6 +11,6 @@ namespace RFramework
         /// </summary>
         /// <param name="level">游戏框架日志等级。</param>
         /// <param name="message">日志内容。</param>
-        void Log(FrameworkLogLevel level, object message);
+        void Log(RFrameworkLogLevel level, object message);
     }
 }

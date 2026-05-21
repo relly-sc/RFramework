@@ -6,12 +6,12 @@ namespace RFramework
     /// <summary>
     /// 框架中包含事件数据的类的基类。
     /// </summary>
-    public abstract class FrameworkEventArgs : EventArgs, IReference
+    public abstract class RFrameworkEventArgs : EventArgs, IReference
     {
         /// <summary>
         /// 初始化框架中包含事件数据的类的新实例。
         /// </summary>
-        public FrameworkEventArgs()
+        public RFrameworkEventArgs()
         {
 
         }

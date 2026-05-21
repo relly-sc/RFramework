@@ -33,7 +33,7 @@ namespace RFramework
             {
                 if (ensureSize < 0)
                 {
-                    throw new FrameworkException("Ensure size is invalid.");
+                    throw new RFrameworkException("Ensure size is invalid.");
                 }
 
                 if (s_CachedHGlobalPtr == IntPtr.Zero || s_CachedHGlobalSize < ensureSize)
@@ -81,7 +81,7 @@ namespace RFramework
             {
                 if (structureSize < 0)
                 {
-                    throw new FrameworkException("Structure size is invalid.");
+                    throw new RFrameworkException("Structure size is invalid.");
                 }
 
                 EnsureCachedHGlobalSize(structureSize);
@@ -139,22 +139,22 @@ namespace RFramework
             {
                 if (structureSize < 0)
                 {
-                    throw new FrameworkException("Structure size is invalid.");
+                    throw new RFrameworkException("Structure size is invalid.");
                 }
 
                 if (result == null)
                 {
-                    throw new FrameworkException("Result is invalid.");
+                    throw new RFrameworkException("Result is invalid.");
                 }
 
                 if (startIndex < 0)
                 {
-                    throw new FrameworkException("Start index is invalid.");
+                    throw new RFrameworkException("Start index is invalid.");
                 }
 
                 if (startIndex + structureSize > result.Length)
                 {
-                    throw new FrameworkException("Result length is not enough.");
+                    throw new RFrameworkException("Result length is not enough.");
                 }
 
                 EnsureCachedHGlobalSize(structureSize);
@@ -211,22 +211,22 @@ namespace RFramework
             {
                 if (structureSize < 0)
                 {
-                    throw new FrameworkException("Structure size is invalid.");
+                    throw new RFrameworkException("Structure size is invalid.");
                 }
 
                 if (buffer == null)
                 {
-                    throw new FrameworkException("Buffer is invalid.");
+                    throw new RFrameworkException("Buffer is invalid.");
                 }
 
                 if (startIndex < 0)
                 {
-                    throw new FrameworkException("Start index is invalid.");
+                    throw new RFrameworkException("Start index is invalid.");
                 }
 
                 if (startIndex + structureSize > buffer.Length)
                 {
-                    throw new FrameworkException("Buffer length is not enough.");
+                    throw new RFrameworkException("Buffer length is not enough.");
                 }
 
                 EnsureCachedHGlobalSize(structureSize);

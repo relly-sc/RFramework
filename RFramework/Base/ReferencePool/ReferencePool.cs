@@ -103,7 +103,7 @@ namespace RFramework
         {
             if (reference == null)
             {
-                throw new FrameworkException("Reference is invalid.");
+                throw new RFrameworkException("Reference is invalid.");
             }
 
             Type referenceType = reference.GetType();
@@ -182,17 +182,17 @@ namespace RFramework
 
             if (referenceType == null)
             {
-                throw new FrameworkException("Reference type is invalid.");
+                throw new RFrameworkException("Reference type is invalid.");
             }
 
             if (!referenceType.IsClass || referenceType.IsAbstract)
             {
-                throw new FrameworkException("Reference type is not a non-abstract class type.");
+                throw new RFrameworkException("Reference type is not a non-abstract class type.");
             }
 
             if (!typeof(IReference).IsAssignableFrom(referenceType))
             {
-                throw new FrameworkException(Utility.Text.Format("Reference type '{0}' is invalid.", referenceType.FullName));
+                throw new RFrameworkException(Utility.Text.Format("Reference type '{0}' is invalid.", referenceType.FullName));
             }
         }
 
@@ -200,7 +200,7 @@ namespace RFramework
         {
             if (referenceType == null)
             {
-                throw new FrameworkException("ReferenceType is invalid.");
+                throw new RFrameworkException("ReferenceType is invalid.");
             }
 
             ReferenceCollection referenceCollection = null;

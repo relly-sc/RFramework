@@ -10,7 +10,7 @@ namespace RFramework
     /// </summary>
     /// <typeparam name="T"></typeparam>
     [StructLayout(LayoutKind.Auto)]
-    public struct FrameworkLinkedListRange<T> : IEnumerable<T>, IEnumerable
+    public struct RFrameworkLinkedListRange<T> : IEnumerable<T>, IEnumerable
     {
         private readonly LinkedListNode<T> m_First;
         private readonly LinkedListNode<T> m_Terminal;
@@ -21,11 +21,11 @@ namespace RFramework
         /// </summary>
         /// <param name="first">链表范围的开始结点。</param>
         /// <param name="terminal">链表范围的终结标记结点。</param>
-        public FrameworkLinkedListRange(LinkedListNode<T> first, LinkedListNode<T> terminal)
+        public RFrameworkLinkedListRange(LinkedListNode<T> first, LinkedListNode<T> terminal)
         {
             if (first == null || terminal == null || first == terminal)
             {
-                throw new FrameworkException("Range is invalid.");
+                throw new RFrameworkException("Range is invalid.");
             }
             m_First = first;
             m_Terminal = terminal;
@@ -135,15 +135,15 @@ namespace RFramework
         [StructLayout(LayoutKind.Auto)]
         public struct Enumerator : IEnumerator<T>, IEnumerator
         {
-            private readonly FrameworkLinkedListRange<T> m_FrameworkLinkedListRange;
+            private readonly RFrameworkLinkedListRange<T> m_FrameworkLinkedListRange;
             private LinkedListNode<T> m_Current;
             private T m_CurrentValue;
 
-            internal Enumerator(FrameworkLinkedListRange<T> range)
+            internal Enumerator(RFrameworkLinkedListRange<T> range)
             {
                 if (!range.IsValid)
                 {
-                    throw new FrameworkException("Range is invalid.");
+                    throw new RFrameworkException("Range is invalid.");
                 }
 
                 m_FrameworkLinkedListRange = range;

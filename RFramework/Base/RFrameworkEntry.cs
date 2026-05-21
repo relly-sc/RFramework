@@ -7,9 +7,9 @@ namespace RFramework
     /// <summary>
     /// 框架入口
     /// </summary>
-    public static class FrameworkEntry
+    public static class RFrameworkEntry
     {
-        private static readonly FrameworkLinkedList<FrameworkModule> s_FrameworkModules = new FrameworkLinkedList<FrameworkModule>();
+        private static readonly RFrameworkLinkedList<RFrameworkModule> s_FrameworkModules = new RFrameworkLinkedList<RFrameworkModule>();
 
 
         /// <summary>
@@ -19,7 +19,7 @@ namespace RFramework
         /// <param name="realElapseSeconds">真实流逝时间，以秒为单位。</param>
         public static void Update(float elapseSeconds, float realElapseSeconds)
         {
-            foreach (FrameworkModule module in s_FrameworkModules)
+            foreach (RFrameworkModule module in s_FrameworkModules)
             {
                 module.Update(elapseSeconds, realElapseSeconds);
             }
@@ -30,7 +30,7 @@ namespace RFramework
         /// </summary>
         public static void Shutdown()
         {
-            for (LinkedListNode<FrameworkModule> current = s_FrameworkModules.Last; current != null; current = current.Previous)
+            for (LinkedListNode<RFrameworkModule> current = s_FrameworkModules.Last; current != null; current = current.Previous)
             {
                 current.Value.Shutdown();
             }
@@ -38,7 +38,7 @@ namespace RFramework
             s_FrameworkModules.Clear();
             ReferencePool.ClearAll();
             Utility.Marshal.FreeCachedHGlobal();
-            FrameworkLog.SetLogHelper(null);
+            RFrameworkLog.SetLogHelper(null);
         }
 
         /// <summary>
@@ -52,19 +52,19 @@ namespace RFramework
             Type interfaceType = typeof(T);
             if (!interfaceType.IsInterface)
             {
-                throw new FrameworkException(Utility.Text.Format("You must get module by interface, but '{0}' is not.", interfaceType.FullName));
+                throw new RFrameworkException(Utility.Text.Format("You must get module by interface, but '{0}' is not.", interfaceType.FullName));
             }
 
             if (!interfaceType.FullName.StartsWith("Framework.", StringComparison.Ordinal))
             {
-                throw new FrameworkException(Utility.Text.Format("You must get a UnityFramework module, but '{0}' is not.", interfaceType.FullName));
+                throw new RFrameworkException(Utility.Text.Format("You must get a UnityFramework module, but '{0}' is not.", interfaceType.FullName));
             }
 
             string moduleName = Utility.Text.Format("{0}.{1}", interfaceType.Namespace, interfaceType.Name.Substring(1));
             Type moduleType = Type.GetType(moduleName);
             if (moduleType == null)
             {
-                throw new FrameworkException(Utility.Text.Format("Can not find UnityFramework module type '{0}'.", moduleName));
+                throw new RFrameworkException(Utility.Text.Format("Can not find UnityFramework module type '{0}'.", moduleName));
             }
 
             return GetModule(moduleType) as T;
@@ -76,9 +76,9 @@ namespace RFramework
         /// <param name="moduleType">要获取的框架模块类型。</param>
         /// <returns>要获取的框架模块。</returns>
         /// <remarks>如果要获取的框架模块不存在，则自动创建该框架模块。</remarks>
-        private static FrameworkModule GetModule(Type moduleType)
+        private static RFrameworkModule GetModule(Type moduleType)
         {
-            foreach (FrameworkModule module in s_FrameworkModules)
+            foreach (RFrameworkModule module in s_FrameworkModules)
             {
                 if (module.GetType() == moduleType)
                 {
@@ -94,15 +94,15 @@ namespace RFramework
         /// </summary>
         /// <param name="moduleType">要创建的框架模块类型。</param>
         /// <returns>要创建的框架模块。</returns>
-        private static FrameworkModule CreateModule(Type moduleType)
+        private static RFrameworkModule CreateModule(Type moduleType)
         {
-            FrameworkModule module = (FrameworkModule)Activator.CreateInstance(moduleType);
+            RFrameworkModule module = (RFrameworkModule)Activator.CreateInstance(moduleType);
             if (module == null)
             {
-                throw new FrameworkException(Utility.Text.Format("Can not create module '{0}'.", moduleType.FullName));
+                throw new RFrameworkException(Utility.Text.Format("Can not create module '{0}'.", moduleType.FullName));
             }
 
-            LinkedListNode<FrameworkModule> current = s_FrameworkModules.First;
+            LinkedListNode<RFrameworkModule> current = s_FrameworkModules.First;
             while (current != null)
             {
                 if (module.Priority > current.Value.Priority)

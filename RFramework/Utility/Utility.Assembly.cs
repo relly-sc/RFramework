@@ -52,7 +52,7 @@ namespace RFramework
             {
                 if (results == null)
                 {
-                    throw new FrameworkException("Results is invalid.");
+                    throw new RFrameworkException("Results is invalid.");
                 }
 
                 results.Clear();
@@ -71,7 +71,7 @@ namespace RFramework
             {
                 if (string.IsNullOrEmpty(typeName))
                 {
-                    throw new FrameworkException("Type name is invalid.");
+                    throw new RFrameworkException("Type name is invalid.");
                 }
 
                 Type type = null;
