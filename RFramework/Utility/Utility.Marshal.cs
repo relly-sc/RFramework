@@ -5,15 +5,15 @@ namespace RFramework
 {
     public static partial class Utility
     {
-
         /// <summary>
-        /// Marshal 相关的实用函数
+        /// Marshal 相关的实用函数。
         /// </summary>
         public static class Marshal
         {
             private const int BlockSize = 1024 * 4;
             private static IntPtr s_CachedHGlobalPtr = IntPtr.Zero;
             private static int s_CachedHGlobalSize = 0;
+
             /// <summary>
             /// 获取缓存的从进程的非托管内存中分配的内存的大小。
             /// </summary>
@@ -58,7 +58,6 @@ namespace RFramework
                 }
             }
 
-
             /// <summary>
             /// 将数据从对象转换为二进制流。
             /// </summary>
@@ -90,7 +89,6 @@ namespace RFramework
                 System.Runtime.InteropServices.Marshal.Copy(s_CachedHGlobalPtr, result, 0, structureSize);
                 return result;
             }
-
 
             /// <summary>
             /// 将数据从对象转换为二进制流。
@@ -161,8 +159,6 @@ namespace RFramework
                 System.Runtime.InteropServices.Marshal.StructureToPtr(structure, s_CachedHGlobalPtr, true);
                 System.Runtime.InteropServices.Marshal.Copy(s_CachedHGlobalPtr, result, startIndex, structureSize);
             }
-
-
 
             /// <summary>
             /// 将数据从二进制流转换为对象。

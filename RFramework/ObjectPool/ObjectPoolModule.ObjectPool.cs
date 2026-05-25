@@ -4,7 +4,7 @@ using System.Collections.Generic;
 
 namespace RFramework.ObjectPool
 {
-    internal sealed partial class ObjectPoolManager : RFrameworkModule, IObjectPoolManager
+    internal sealed partial class ObjectPoolModule : RFrameworkModule, IObjectPoolModule
     {
         /// <summary>
         /// 对象池。

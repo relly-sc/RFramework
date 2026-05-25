@@ -3,7 +3,6 @@ using System;
 using System.Collections.Generic;
 
 namespace RFramework
-
 {
     public static partial class Utility
     {

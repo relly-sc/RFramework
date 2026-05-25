@@ -1,7 +1,7 @@
 
 using System;
 
-namespace RFramework
+namespace GameFramework
 {
     public static partial class Utility
     {
@@ -70,5 +70,4 @@ namespace RFramework
             }
         }
     }
-
 }

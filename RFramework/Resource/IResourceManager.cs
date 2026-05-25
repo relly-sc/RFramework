@@ -277,7 +277,7 @@ namespace RFramework.Resource
         /// 设置对象池管理器。
         /// </summary>
         /// <param name="objectPoolManager">对象池管理器。</param>
-        void SetObjectPoolManager(IObjectPoolManager objectPoolManager);
+        void SetObjectPoolManager(IObjectPoolModule objectPoolManager);
 
 
 

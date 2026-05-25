@@ -6,14 +6,14 @@ namespace RFramework.Event
     /// <summary>
     /// 事件管理器。
     /// </summary>
-    internal sealed class EventManager : RFrameworkModule, IEventManager
+    internal sealed class EventModule : RFrameworkModule, IEventModule
     {
         private readonly EventPool<GameEventArgs> m_EventPool;
 
         /// <summary>
         /// 初始化事件管理器的新实例。
         /// </summary>
-        public EventManager()
+        public EventModule()
         {
             m_EventPool = new EventPool<GameEventArgs>(EventPoolMode.AllowNoHandler | EventPoolMode.AllowMultiHandler);
         }

@@ -3,7 +3,7 @@ using System;
 
 namespace RFramework.ObjectPool
 {
-    internal sealed partial class ObjectPoolManager : RFrameworkModule, IObjectPoolManager
+    internal sealed partial class ObjectPoolModule : RFrameworkModule, IObjectPoolModule
     {
         /// <summary>
         /// 内部对象。

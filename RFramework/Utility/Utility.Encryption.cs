@@ -5,7 +5,6 @@ namespace RFramework
 {
     public static partial class Utility
     {
-
         /// <summary>
         /// 加密解密相关的实用函数。
         /// </summary>

@@ -4,7 +4,6 @@ using System.Text;
 
 namespace RFramework
 {
-
     public static partial class Utility
     {
         /// <summary>

@@ -7,7 +7,7 @@ namespace RFramework
     /// <summary>
     /// 框架入口
     /// </summary>
-    public static class RFrameworkEntry
+    public static class RFrameworkModuleEntry
     {
         private static readonly RFrameworkLinkedList<RFrameworkModule> s_FrameworkModules = new RFrameworkLinkedList<RFrameworkModule>();
 

@@ -5,7 +5,7 @@ namespace RFramework.Event
     /// <summary>
     /// 事件管理器接口
     /// </summary>
-    public interface IEventManager
+    public interface IEventModule
     {
         /// <summary>
         /// 获取事件处理函数的数量。

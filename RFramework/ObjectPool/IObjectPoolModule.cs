@@ -7,7 +7,7 @@ namespace RFramework.ObjectPool
     /// <summary>
     /// 对象池管理器。
     /// </summary>
-    public interface IObjectPoolManager
+    public interface IObjectPoolModule
     {
         /// <summary>
         /// 获取对象池数量。

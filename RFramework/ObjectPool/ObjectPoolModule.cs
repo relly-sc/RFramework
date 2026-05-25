@@ -7,7 +7,7 @@ namespace RFramework.ObjectPool
     /// <summary>
     /// 对象池管理器。
     /// </summary>
-    internal sealed partial class ObjectPoolManager : RFrameworkModule, IObjectPoolManager
+    internal sealed partial class ObjectPoolModule : RFrameworkModule, IObjectPoolModule
     {
         private const int DefaultCapacity = int.MaxValue;
         private const float DefaultExpireTime = float.MaxValue;
@@ -20,7 +20,7 @@ namespace RFramework.ObjectPool
         /// <summary>
         /// 初始化对象池管理器的新实例。
         /// </summary>
-        public ObjectPoolManager()
+        public ObjectPoolModule()
         {
             m_ObjectPools = new Dictionary<TypeNamePair, ObjectPoolBase>();
             m_CachedAllObjectPools = new List<ObjectPoolBase>();
