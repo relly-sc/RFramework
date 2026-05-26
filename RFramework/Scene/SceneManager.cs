@@ -15,7 +15,7 @@ namespace RFramework.Scene
         private readonly List<string> m_UnloadingSceneAssetNames;
         private readonly LoadSceneCallbacks m_LoadSceneCallbacks;
         private readonly UnloadSceneCallbacks m_UnloadSceneCallbacks;
-        private IResourceManager m_ResourceManager;
+        private IResourceModule m_ResourceModule;
         private EventHandler<LoadSceneSuccessEventArgs> m_LoadSceneSuccessEventHandler;
         private EventHandler<LoadSceneFailureEventArgs> m_LoadSceneFailureEventHandler;
         private EventHandler<LoadSceneUpdateEventArgs> m_LoadSceneUpdateEventHandler;
@@ -33,7 +33,7 @@ namespace RFramework.Scene
             m_UnloadingSceneAssetNames = new List<string>();
             m_LoadSceneCallbacks = new LoadSceneCallbacks(LoadSceneSuccessCallback, LoadSceneFailureCallback, LoadSceneUpdateCallback, LoadSceneDependencyAssetCallback);
             m_UnloadSceneCallbacks = new UnloadSceneCallbacks(UnloadSceneSuccessCallback, UnloadSceneFailureCallback);
-            m_ResourceManager = null;
+            m_ResourceModule = null;
             m_LoadSceneSuccessEventHandler = null;
             m_LoadSceneFailureEventHandler = null;
             m_LoadSceneUpdateEventHandler = null;
@@ -177,15 +177,15 @@ namespace RFramework.Scene
         /// <summary>
         /// 设置资源管理器。
         /// </summary>
-        /// <param name="resourceManager">资源管理器。</param>
-        public void SetResourceManager(IResourceManager resourceManager)
+        /// <param name="resourceModule">资源模块。</param>
+        public void SetResourceModule(IResourceModule resourceModule)
         {
-            if (resourceManager == null)
+            if (resourceModule == null)
             {
-                throw new RFrameworkException("Resource manager is invalid.");
+                throw new RFrameworkException("Resource module is invalid.");
             }
 
-            m_ResourceManager = resourceManager;
+            m_ResourceModule = resourceModule;
         }
 
         /// <summary>
@@ -357,9 +357,9 @@ namespace RFramework.Scene
                 throw new RFrameworkException("Scene asset name is invalid.");
             }
 
-            if (m_ResourceManager == null)
+            if (m_ResourceModule == null)
             {
-                throw new RFrameworkException("You must set resource manager first.");
+                throw new RFrameworkException("You must set resource module first.");
             }
 
             if (SceneIsUnloading(sceneAssetName))
@@ -402,9 +402,9 @@ namespace RFramework.Scene
                 throw new RFrameworkException("Scene asset name is invalid.");
             }
 
-            if (m_ResourceManager == null)
+            if (m_ResourceModule == null)
             {
-                throw new RFrameworkException("You must set resource manager first.");
+                throw new RFrameworkException("You must set resource module first.");
             }
 
             if (SceneIsUnloading(sceneAssetName))

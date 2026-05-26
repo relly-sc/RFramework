@@ -7,23 +7,33 @@ namespace RFramework.Resource
     public enum ResourceMode : byte
     {
         /// <summary>
-        /// 未指定。
+        /// 未指定运行模式
         /// </summary>
-        Unspecified = 0,
+        None = 0,
 
         /// <summary>
-        /// 单机模式。
+        /// 编辑器下的模拟模式
         /// </summary>
-        Package,
+        EditorSimulateMode,
 
         /// <summary>
-        /// 预下载的可更新模式。
+        /// 离线运行模式
         /// </summary>
-        Updatable,
+        OfflinePlayMode,
 
         /// <summary>
-        /// 使用时下载的可更新模式。
+        /// 联机运行模式
         /// </summary>
-        UpdatableWhilePlaying
+        HostPlayMode,
+
+        /// <summary>
+        /// WebGL运行模式
+        /// </summary>
+        WebPlayMode,
+
+        /// <summary>
+        /// 自定义运行模式
+        /// </summary>
+        CustomPlayMode,
     }
 }
