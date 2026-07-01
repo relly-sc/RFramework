@@ -6,15 +6,11 @@ namespace RFramework
     /// </summary>
     public enum RFrameworkLogLevel : byte
     {
-        /// <summary>
-        /// 调试。
-        /// </summary>
-        Debug = 0,
 
         /// <summary>
         /// 信息。
         /// </summary>
-        Info,
+        Info = 0,
 
         /// <summary>
         /// 警告。
@@ -22,13 +18,18 @@ namespace RFramework
         Warning,
 
         /// <summary>
+        /// 断言。
+        /// </summary>
+        Assert,
+
+        /// <summary>
         /// 错误。
         /// </summary>
         Error,
 
         /// <summary>
-        /// 严重错误。
+        /// 异常。
         /// </summary>
-        Fatal
+        Exception
     }
 }

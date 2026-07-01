@@ -5,38 +5,46 @@ using System.Collections.Generic;
 namespace RFramework
 {
     /// <summary>
-    /// 框架入口
+    /// 框架模块入口，管理所有 RFrameworkModule 的生命周期。
     /// </summary>
+    /// <remarks>
+    /// 使用 C# 标准 LinkedList 管理模块，理由：
+    /// 1. 注册时按 Priority 遍历插入，插入即有序，无需事后 Sort()；
+    /// 2. Update 从 Last 往前遍历（高 Priority 先执行），Shutdown 从 First 往后遍历（低 Priority 先释放），
+    ///    双向链表天然支持两端遍历；
+    /// 3. 框架模块数量有限（10~15 个），O(n) 线性查找可以忽略。
+    /// 不封装自定义 LinkedList——标准库已足够，减少"为封装而封装"。
+    /// </remarks>
     public static class RFrameworkModuleEntry
     {
-        private static readonly RFrameworkLinkedList<RFrameworkModule> s_FrameworkModules = new RFrameworkLinkedList<RFrameworkModule>();
-
+        private static readonly LinkedList<RFrameworkModule> frameworkModules = new LinkedList<RFrameworkModule>();
 
         /// <summary>
         /// 所有框架模块轮询。
+        /// 按 Priority 降序遍历：优先级高的模块先执行 Update。
         /// </summary>
         /// <param name="elapseSeconds">逻辑流逝时间，以秒为单位。</param>
         /// <param name="realElapseSeconds">真实流逝时间，以秒为单位。</param>
         public static void Update(float elapseSeconds, float realElapseSeconds)
         {
-            foreach (RFrameworkModule module in s_FrameworkModules)
+            for (LinkedListNode<RFrameworkModule> node = frameworkModules.Last; node != null; node = node.Previous)
             {
-                module.Update(elapseSeconds, realElapseSeconds);
+                node.Value.Update(elapseSeconds, realElapseSeconds);
             }
         }
 
         /// <summary>
         /// 关闭并清理所有框架模块。
+        /// 按 Priority 升序遍历：优先级低的模块先释放。
         /// </summary>
         public static void Shutdown()
         {
-            for (LinkedListNode<RFrameworkModule> current = s_FrameworkModules.Last; current != null; current = current.Previous)
+            for (LinkedListNode<RFrameworkModule> node = frameworkModules.First; node != null; node = node.Next)
             {
-                current.Value.Shutdown();
+                node.Value.Shutdown();
             }
 
-            s_FrameworkModules.Clear();
-            ReferencePool.ClearAll();
+            frameworkModules.Clear();
             Utility.Marshal.FreeCachedHGlobal();
             RFrameworkLog.SetLogHelper(null);
         }
@@ -55,16 +63,16 @@ namespace RFramework
                 throw new RFrameworkException(Utility.Text.Format("You must get module by interface, but '{0}' is not.", interfaceType.FullName));
             }
 
-            if (!interfaceType.FullName.StartsWith("Framework.", StringComparison.Ordinal))
+            if (!interfaceType.FullName.StartsWith("RFramework.", StringComparison.Ordinal))
             {
-                throw new RFrameworkException(Utility.Text.Format("You must get a UnityFramework module, but '{0}' is not.", interfaceType.FullName));
+                throw new RFrameworkException(Utility.Text.Format("You must get a RFramework module, but '{0}' is not.", interfaceType.FullName));
             }
 
             string moduleName = Utility.Text.Format("{0}.{1}", interfaceType.Namespace, interfaceType.Name.Substring(1));
             Type moduleType = Type.GetType(moduleName);
             if (moduleType == null)
             {
-                throw new RFrameworkException(Utility.Text.Format("Can not find UnityFramework module type '{0}'.", moduleName));
+                throw new RFrameworkException(Utility.Text.Format("Can not find RFramework module type '{0}'.", moduleName));
             }
 
             return GetModule(moduleType) as T;
@@ -78,11 +86,11 @@ namespace RFramework
         /// <remarks>如果要获取的框架模块不存在，则自动创建该框架模块。</remarks>
         private static RFrameworkModule GetModule(Type moduleType)
         {
-            foreach (RFrameworkModule module in s_FrameworkModules)
+            for (LinkedListNode<RFrameworkModule> node = frameworkModules.First; node != null; node = node.Next)
             {
-                if (module.GetType() == moduleType)
+                if (node.Value.GetType() == moduleType)
                 {
-                    return module;
+                    return node.Value;
                 }
             }
 
@@ -90,10 +98,13 @@ namespace RFramework
         }
 
         /// <summary>
-        /// 创建框架模块。
+        /// 创建框架模块，并按 Priority 插入链表保持升序。
+        /// 遍历链表找到第一个 Priority 大于当前模块的节点，插入其前面；
+        /// 若没有更大者则追加到末尾。
+        /// 插入即有序，无需额外 Sort()。
         /// </summary>
         /// <param name="moduleType">要创建的框架模块类型。</param>
-        /// <returns>要创建的框架模块。</returns>
+        /// <returns>创建的框架模块实例。</returns>
         private static RFrameworkModule CreateModule(Type moduleType)
         {
             RFrameworkModule module = (RFrameworkModule)Activator.CreateInstance(moduleType);
@@ -102,26 +113,21 @@ namespace RFramework
                 throw new RFrameworkException(Utility.Text.Format("Can not create module '{0}'.", moduleType.FullName));
             }
 
-            LinkedListNode<RFrameworkModule> current = s_FrameworkModules.First;
+            // 按 Priority 升序插入：遍历找到第一个 Priority 更大的节点，插到它前面
+            LinkedListNode<RFrameworkModule> current = frameworkModules.First;
             while (current != null)
             {
-                if (module.Priority > current.Value.Priority)
+                if (current.Value.Priority > module.Priority)
                 {
-                    break;
+                    frameworkModules.AddBefore(current, module);
+                    return module;
                 }
 
                 current = current.Next;
             }
 
-            if (current != null)
-            {
-                s_FrameworkModules.AddBefore(current, module);
-            }
-            else
-            {
-                s_FrameworkModules.AddLast(module);
-            }
-
+            // 没找到更大的，追加到末尾
+            frameworkModules.AddLast(module);
             return module;
         }
     }
