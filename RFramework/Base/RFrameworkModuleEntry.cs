@@ -7,14 +7,6 @@ namespace RFramework
     /// <summary>
     /// 框架模块入口，管理所有 RFrameworkModule 的生命周期。
     /// </summary>
-    /// <remarks>
-    /// 使用 C# 标准 LinkedList 管理模块，理由：
-    /// 1. 注册时按 Priority 遍历插入，插入即有序，无需事后 Sort()；
-    /// 2. Update 从 Last 往前遍历（高 Priority 先执行），Shutdown 从 First 往后遍历（低 Priority 先释放），
-    ///    双向链表天然支持两端遍历；
-    /// 3. 框架模块数量有限（10~15 个），O(n) 线性查找可以忽略。
-    /// 不封装自定义 LinkedList——标准库已足够，减少"为封装而封装"。
-    /// </remarks>
     public static class RFrameworkModuleEntry
     {
         private static readonly LinkedList<RFrameworkModule> frameworkModules = new LinkedList<RFrameworkModule>();

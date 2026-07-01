@@ -3,15 +3,8 @@ using System;
 namespace RFramework.Pool
 {
     /// <summary>
-    /// 对象池服务接口。
-    /// 管理所有对象池的生命周期，支持 GameObject 池和普通 class 池。
+    /// 对象池服务接口。通过委托注入行为，不强制继承基类。
     /// </summary>
-    /// <remarks>
-    /// 通过传入 createFunc/onSpawn/onUnspawn/onDestroy 回调，
-    /// 同一套池化逻辑可复用于任意类型——不强制继承基类。
-    /// 与 GF 的 ObjectBase 强制包装不同，本接口通过委托注入行为，
-    /// 零侵入、零耦合。
-    /// </remarks>
     public interface IPoolModule
     {
         /// <summary>

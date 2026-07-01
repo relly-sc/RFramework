@@ -1,7 +1,7 @@
 
 using System;
 
-namespace GameFramework
+namespace RFramework
 {
     public static partial class Utility
     {

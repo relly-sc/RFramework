@@ -4,15 +4,8 @@ using System.Collections.Generic;
 namespace RFramework.Pool
 {
     /// <summary>
-    /// 对象池模块，继承 RFrameworkModule 接入框架生命周期。
-    /// 管理所有对象池（GameObject 池 + class 池）的创建、获取、销毁。
+    /// 对象池模块。通过泛型 + 可选参数 + 委托注入实现零侵入池化。
     /// </summary>
-    /// <remarks>
-    /// GF 的 ObjectPoolManager 约 900 行，50+ 个 Create 重载。
-    /// 本实现通过泛型 + 可选参数压缩到一个 CreatePool 方法，总代码量减少 80%。
-    /// 通过 CreatePool 的委托注入行为，不强制对象继承 ObjectBase。
-    /// 内部使用 IObjectPoolBase 基接口统一管理不同泛型实例，消除反射。
-    /// </remarks>
     internal sealed class PoolModule : RFrameworkModule, IPoolModule
     {
         private readonly Dictionary<string, IObjectPoolBase> pools;
