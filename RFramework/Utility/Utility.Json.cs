@@ -10,6 +10,9 @@ namespace RFramework
         /// </summary>
         public static partial class Json
         {
+            /// <summary>
+            /// JSON 序列化辅助器实例。
+            /// </summary>
             private static IJsonHelper s_JsonHelper = null;
 
             /// <summary>

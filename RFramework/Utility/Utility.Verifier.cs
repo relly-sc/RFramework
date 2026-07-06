@@ -11,8 +11,17 @@ namespace RFramework
         /// </summary>
         public static partial class Verifier
         {
+            /// <summary>
+            /// CRC32 计算的缓存字节数组长度。
+            /// </summary>
             private const int CachedBytesLength = 0x1000;
+            /// <summary>
+            /// CRC32 计算使用的缓存字节数组。
+            /// </summary>
             private static readonly byte[] s_CachedBytes = new byte[CachedBytesLength];
+            /// <summary>
+            /// CRC32 算法实例。
+            /// </summary>
             private static readonly Crc32 s_Algorithm = new Crc32();
 
             /// <summary>
@@ -130,6 +139,13 @@ namespace RFramework
                 bytes[offset + 3] = (byte)(crc32 & 0xff);
             }
 
+            /// <summary>
+            /// 从流中计算 CRC32 校验值。
+            /// </summary>
+            /// <param name="stream">指定的数据流。</param>
+            /// <param name="code">异或校验码。</param>
+            /// <param name="length">校验长度。</param>
+            /// <returns>计算后的 CRC32。</returns>
             internal static int GetCrc32(Stream stream, byte[] code, int length)
             {
                 if (stream == null)

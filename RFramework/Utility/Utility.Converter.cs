@@ -11,7 +11,13 @@ namespace RFramework
         /// </summary>
         public static class Converter
         {
+            /// <summary>
+            /// 英寸转厘米的换算系数。
+            /// </summary>
             private const float InchesToCentimeters = 2.54f; // 1 inch = 2.54 cm
+            /// <summary>
+            /// 厘米转英寸的换算系数。
+            /// </summary>
             private const float CentimetersToInches = 1f / InchesToCentimeters; // 1 cm = 0.3937 inches
 
             /// <summary>

@@ -11,6 +11,9 @@ namespace RFramework
         /// </summary>
         public static partial class Compression
         {
+            /// <summary>
+            /// 压缩辅助器实例。
+            /// </summary>
             private static ICompressionHelper s_CompressionHelper = null;
 
             /// <summary>

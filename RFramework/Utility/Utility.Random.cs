@@ -10,6 +10,9 @@ namespace RFramework
         /// </summary>
         public static class Random
         {
+            /// <summary>
+            /// 随机数生成器实例。
+            /// </summary>
             private static System.Random s_Random = new System.Random((int)DateTime.UtcNow.Ticks);
 
             /// <summary>

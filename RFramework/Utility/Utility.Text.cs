@@ -8,6 +8,9 @@ namespace RFramework
         /// </summary>
         public static partial class Text
         {
+            /// <summary>
+            /// 文本辅助器实例。
+            /// </summary>
             private static ITextHelper s_TextHelper = null;
 
             /// <summary>

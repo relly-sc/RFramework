@@ -11,7 +11,13 @@ namespace RFramework
         /// </summary>
         public static class Assembly
         {
+            /// <summary>
+            /// 已缓存的所有程序集数组。
+            /// </summary>
             private static readonly System.Reflection.Assembly[] s_Assemblies = null;
+            /// <summary>
+            /// 按全限定名缓存的类型字典。
+            /// </summary>
             private static readonly Dictionary<string, Type> s_CachedTypes = new Dictionary<string, Type>(StringComparer.Ordinal);
 
             static Assembly()

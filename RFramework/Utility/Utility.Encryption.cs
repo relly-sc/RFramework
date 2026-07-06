@@ -10,6 +10,9 @@ namespace RFramework
         /// </summary>
         public static class Encryption
         {
+            /// <summary>
+            /// 快速加密的最大数据长度。
+            /// </summary>
             internal const int QuickEncryptLength = 220;
 
             /// <summary>

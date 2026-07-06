@@ -10,8 +10,17 @@ namespace RFramework
         /// </summary>
         public static class Marshal
         {
+            /// <summary>
+            /// 非托管内存块的默认大小。
+            /// </summary>
             private const int BlockSize = 1024 * 4;
+            /// <summary>
+            /// 缓存的非托管内存指针。
+            /// </summary>
             private static IntPtr s_CachedHGlobalPtr = IntPtr.Zero;
+            /// <summary>
+            /// 缓存的非托管内存大小。
+            /// </summary>
             private static int s_CachedHGlobalSize = 0;
 
             /// <summary>
