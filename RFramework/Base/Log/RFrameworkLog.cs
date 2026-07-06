@@ -9,6 +9,14 @@ namespace RFramework
         private static ILogHelper logHelper;
 
         /// <summary>
+        /// 获取日志辅助器是否已初始化。
+        /// </summary>
+        public static bool IsInitialized
+        {
+            get { return logHelper != null; }
+        }
+
+        /// <summary>
         /// 设置游戏框架日志辅助器。
         /// </summary>
         /// <param name="_logHelper">要设置的游戏框架日志辅助器。</param>
@@ -25,7 +33,7 @@ namespace RFramework
         {
             if (logHelper == null)
             {
-                return;
+                throw new RFrameworkException("RFrameworkLog: Log helper is not initialized. Please call SetLogHelper before using any log methods.");
             }
 
             logHelper.Log(RFrameworkLogLevel.Info, message);
@@ -39,7 +47,7 @@ namespace RFramework
         {
             if (logHelper == null)
             {
-                return;
+                throw new RFrameworkException("RFrameworkLog: Log helper is not initialized. Please call SetLogHelper before using any log methods.");
             }
 
             logHelper.Log(RFrameworkLogLevel.Info, message);
@@ -54,7 +62,7 @@ namespace RFramework
         {
             if (logHelper == null)
             {
-                return;
+                throw new RFrameworkException("RFrameworkLog: Log helper is not initialized. Please call SetLogHelper before using any log methods.");
             }
 
             logHelper.Log(RFrameworkLogLevel.Info, Utility.Text.Format(format, args));
@@ -68,7 +76,7 @@ namespace RFramework
         {
             if (logHelper == null)
             {
-                return;
+                throw new RFrameworkException("RFrameworkLog: Log helper is not initialized. Please call SetLogHelper before using any log methods.");
             }
 
             logHelper.Log(RFrameworkLogLevel.Warning, message);
@@ -82,7 +90,7 @@ namespace RFramework
         {
             if (logHelper == null)
             {
-                return;
+                throw new RFrameworkException("RFrameworkLog: Log helper is not initialized. Please call SetLogHelper before using any log methods.");
             }
 
             logHelper.Log(RFrameworkLogLevel.Warning, message);
@@ -97,7 +105,7 @@ namespace RFramework
         {
             if (logHelper == null)
             {
-                return;
+                throw new RFrameworkException("RFrameworkLog: Log helper is not initialized. Please call SetLogHelper before using any log methods.");
             }
 
             logHelper.Log(RFrameworkLogLevel.Warning, Utility.Text.Format(format, args));
@@ -111,7 +119,7 @@ namespace RFramework
         {
             if (logHelper == null)
             {
-                return;
+                throw new RFrameworkException("RFrameworkLog: Log helper is not initialized. Please call SetLogHelper before using any log methods.");
             }
 
             logHelper.Log(RFrameworkLogLevel.Error, message);
@@ -125,7 +133,7 @@ namespace RFramework
         {
             if (logHelper == null)
             {
-                return;
+                throw new RFrameworkException("RFrameworkLog: Log helper is not initialized. Please call SetLogHelper before using any log methods.");
             }
 
             logHelper.Log(RFrameworkLogLevel.Error, message);
@@ -140,7 +148,7 @@ namespace RFramework
         {
             if (logHelper == null)
             {
-                return;
+                throw new RFrameworkException("RFrameworkLog: Log helper is not initialized. Please call SetLogHelper before using any log methods.");
             }
 
             logHelper.Log(RFrameworkLogLevel.Error, Utility.Text.Format(format, args));

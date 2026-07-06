@@ -1,0 +1,315 @@
+using System;
+using System.Collections.Generic;
+using RFramework.Event;
+
+namespace RFramework.Config
+{
+    /// <summary>
+    /// 配置模块核心实现。
+    /// 负责配置表的内存缓存与查询，通过 IConfigHelper 与 Luban 等配置工具解耦。
+    /// 不涉及资源加载——字节数据由 Runtime ConfigComponent 通过 ResourceModule 获取后传入。
+    /// </summary>
+    internal sealed class ConfigModule : RFrameworkModule, IConfigModule
+    {
+        /// <summary>
+        /// 获取框架模块优先级。
+        /// 高于 Resource(20)，确保配置模块在资源之后初始化。
+        /// </summary>
+        internal override int Priority
+        {
+            get { return 30; }
+        }
+
+        // ==================== 依赖注入 ====================
+
+        /// <summary>配置辅助器，封装 Luban 反序列化等引擎特定操作</summary>
+        private IConfigHelper helper;
+
+        /// <summary>事件模块引用，用于分发加载成功/失败事件。惰性获取，可能为 null。</summary>
+        private IEventModule eventModule;
+
+        // ==================== 配置缓存 ====================
+
+        /// <summary>已加载配置表缓存：行类型 → 解析后的表对象（Luban 表实例）</summary>
+        private readonly Dictionary<Type, object> configTables = new Dictionary<Type, object>();
+
+        /// <summary>已加载配置的元数据缓存：行类型 → 行数量</summary>
+        private readonly Dictionary<Type, int> configRowCounts = new Dictionary<Type, int>();
+
+        // ==================== 配置方法 ====================
+
+        /// <summary>
+        /// 设置配置辅助器（必须在加载任何配置前调用）。
+        /// </summary>
+        /// <param name="helper">配置辅助器实例，由 Runtime 层创建并注入。</param>
+        public void SetHelper(IConfigHelper helper)
+        {
+            this.helper = helper ?? throw new RFrameworkException("Config helper is invalid.");
+        }
+
+        // ==================== 配置加载 ====================
+
+        /// <summary>
+        /// 从字节数据加载配置表。
+        /// 映射行类型→表类型 → 解析字节 → 缓存表对象。
+        /// 重复加载相同类型会覆盖旧数据。
+        /// </summary>
+        /// <typeparam name="T">配置行类型（Luban 生成的如 ItemConfig）。</typeparam>
+        /// <param name="configBytes">配置原始字节数据。</param>
+        public void LoadConfig<T>(byte[] configBytes) where T : class
+        {
+            EnsureHelper();
+
+            Type rowType = typeof(T);
+
+            if (configBytes == null || configBytes.Length == 0)
+            {
+                string errorMsg = $"ConfigModule: LoadConfig<{rowType.Name}> failed: config bytes is empty.";
+                FireLoadFailedEvent(rowType, errorMsg);
+                throw new RFrameworkException(errorMsg);
+            }
+
+            try
+            {
+                // 1. 映射行类型 → 表类型（如 ItemConfig → TbItem）
+                Type tableType = helper.GetTableType(rowType);
+
+                // 2. 解析字节为表对象
+                object parsedTable = helper.ParseConfig(tableType, configBytes);
+
+                // 3. 缓存
+                configTables[rowType] = parsedTable;
+
+                // 4. 记录行数（用于事件分发）
+                int rowCount = 0;
+                try
+                {
+                    IReadOnlyList<T> allRows = helper.GetAllConfigs<T>(parsedTable);
+                    rowCount = allRows != null ? allRows.Count : 0;
+                }
+                catch
+                {
+                    // 行数统计失败不影响加载流程
+                }
+
+                configRowCounts[rowType] = rowCount;
+
+                // 5. 分发成功事件
+                FireLoadSuccessEvent(rowType, rowCount);
+            }
+            catch (Exception ex)
+            {
+                // 清理可能的脏数据
+                configTables.Remove(rowType);
+                configRowCounts.Remove(rowType);
+
+                FireLoadFailedEvent(rowType, ex.Message);
+                throw;
+            }
+        }
+
+        // ==================== 配置卸载 ====================
+
+        /// <summary>
+        /// 卸载指定类型的配置表。
+        /// </summary>
+        /// <typeparam name="T">配置行类型。</typeparam>
+        public void UnloadConfig<T>() where T : class
+        {
+            Type rowType = typeof(T);
+
+            if (configTables.TryGetValue(rowType, out object parsedTable))
+            {
+                helper.ReleaseConfig(parsedTable);
+                configTables.Remove(rowType);
+                configRowCounts.Remove(rowType);
+            }
+        }
+
+        /// <summary>
+        /// 卸载所有已加载的配置表。
+        /// </summary>
+        public void UnloadAllConfigs()
+        {
+            foreach (KeyValuePair<Type, object> kv in configTables)
+            {
+                helper.ReleaseConfig(kv.Value);
+            }
+
+            configTables.Clear();
+            configRowCounts.Clear();
+        }
+
+        // ==================== 配置查询 ====================
+
+        /// <summary>
+        /// 检查指定类型的配置表是否已加载。
+        /// </summary>
+        /// <typeparam name="T">配置行类型。</typeparam>
+        /// <returns>已加载返回 true，否则返回 false。</returns>
+        public bool HasConfig<T>() where T : class
+        {
+            return configTables.ContainsKey(typeof(T));
+        }
+
+        /// <summary>
+        /// 从已加载的配置表中获取指定 ID 的配置行。
+        /// </summary>
+        /// <typeparam name="T">配置行类型。</typeparam>
+        /// <param name="id">配置行 ID。</param>
+        /// <returns>配置行实例，不存在时返回 null。</returns>
+        public T GetConfig<T>(int id) where T : class
+        {
+            Type rowType = typeof(T);
+
+            if (!configTables.TryGetValue(rowType, out object parsedTable))
+            {
+                throw new RFrameworkException(
+                    $"ConfigModule: Config<{rowType.Name}> not loaded. Call LoadConfig first.");
+            }
+
+            EnsureHelper();
+            return helper.GetConfig<T>(parsedTable, id);
+        }
+
+        /// <summary>
+        /// 检查已加载的配置表中是否包含指定 ID 的配置行。
+        /// </summary>
+        /// <typeparam name="T">配置行类型。</typeparam>
+        /// <param name="id">配置行 ID。</param>
+        /// <returns>存在返回 true，否则返回 false。</returns>
+        public bool HasConfigRow<T>(int id) where T : class
+        {
+            Type rowType = typeof(T);
+
+            if (!configTables.TryGetValue(rowType, out object parsedTable))
+            {
+                return false;
+            }
+
+            EnsureHelper();
+            return helper.ContainsConfig(parsedTable, id);
+        }
+
+        /// <summary>
+        /// 获取已加载配置表中的所有配置行。
+        /// </summary>
+        /// <typeparam name="T">配置行类型。</typeparam>
+        /// <returns>配置行只读列表。</returns>
+        public IReadOnlyList<T> GetAllConfigs<T>() where T : class
+        {
+            Type rowType = typeof(T);
+
+            if (!configTables.TryGetValue(rowType, out object parsedTable))
+            {
+                throw new RFrameworkException(
+                    $"ConfigModule: Config<{rowType.Name}> not loaded. Call LoadConfig first.");
+            }
+
+            EnsureHelper();
+            return helper.GetAllConfigs<T>(parsedTable);
+        }
+
+        /// <summary>
+        /// 获取当前已加载的配置表数量。
+        /// </summary>
+        public int ConfigCount
+        {
+            get { return configTables.Count; }
+        }
+
+        // ==================== RFrameworkModule 生命周期 ====================
+
+        /// <summary>
+        /// 每帧更新。当前无每帧操作，预留。
+        /// </summary>
+        /// <param name="elapseSeconds">逻辑流逝时间，以秒为单位。</param>
+        /// <param name="realElapseSeconds">真实流逝时间，以秒为单位。</param>
+        internal override void Update(float elapseSeconds, float realElapseSeconds)
+        {
+            // 当前无需每帧操作
+        }
+
+        /// <summary>
+        /// 关闭并清理配置模块。释放所有缓存的配置表。
+        /// </summary>
+        internal override void Shutdown()
+        {
+            UnloadAllConfigs();
+            helper = null;
+        }
+
+        // ==================== 私有方法 ====================
+
+        /// <summary>
+        /// 检查辅助器是否已设置，未设置时抛出异常。
+        /// </summary>
+        private void EnsureHelper()
+        {
+            if (helper == null)
+            {
+                throw new RFrameworkException(
+                    "ConfigModule: Helper not set. Call SetHelper() before loading config.");
+            }
+        }
+
+        /// <summary>
+        /// 惰性获取事件模块引用。
+        /// 通过 RFrameworkModuleEntry.GetModule 获取，若事件模块尚未就绪则返回 null。
+        /// </summary>
+        /// <returns>事件模块实例，未就绪时为 null。</returns>
+        private IEventModule GetEventModule()
+        {
+            if (eventModule == null)
+            {
+                try
+                {
+                    eventModule = RFrameworkModuleEntry.GetModule<IEventModule>();
+                }
+                catch
+                {
+                    // 事件模块未就绪时静默处理
+                    return null;
+                }
+            }
+
+            return eventModule;
+        }
+
+        /// <summary>
+        /// 分发配置加载成功事件。
+        /// 事件模块未就绪时静默跳过。
+        /// </summary>
+        /// <param name="configType">配置行类型。</param>
+        /// <param name="rowCount">加载的配置行数量。</param>
+        private void FireLoadSuccessEvent(Type configType, int rowCount)
+        {
+            IEventModule evt = GetEventModule();
+            if (evt == null)
+            {
+                return;
+            }
+
+            ConfigLoadSuccessEvent successEvent = new ConfigLoadSuccessEvent(configType, rowCount);
+            evt.Fire(successEvent);
+        }
+
+        /// <summary>
+        /// 分发配置加载失败事件。
+        /// 事件模块未就绪时静默跳过。
+        /// </summary>
+        /// <param name="configType">配置行类型。</param>
+        /// <param name="errorMessage">失败原因。</param>
+        private void FireLoadFailedEvent(Type configType, string errorMessage)
+        {
+            IEventModule evt = GetEventModule();
+            if (evt == null)
+            {
+                return;
+            }
+
+            ConfigLoadFailedEvent failedEvent = new ConfigLoadFailedEvent(configType, errorMessage);
+            evt.Fire(failedEvent);
+        }
+    }
+}
