@@ -26,5 +26,15 @@ namespace RFramework.WebRequest
         /// <param name="ct">取消令牌，在超时或用户取消时触发。</param>
         /// <returns>HTTP 响应，包含状态码、头、响应体和错误分类。</returns>
         Task<WebResponse> SendAsync(WebRequestData request, IProgress<float> progress, CancellationToken ct);
+
+        /// <summary>
+        /// 流式下载文件到磁盘（不经过内存缓存，适合大文件）。
+        /// </summary>
+        /// <param name="request">完整的请求数据。</param>
+        /// <param name="savePath">保存到磁盘的目标路径。</param>
+        /// <param name="progress">下载进度报告器（0.0 ~ 1.0），可为 null。</param>
+        /// <param name="ct">取消令牌。</param>
+        /// <returns>下载完成 Task。</returns>
+        Task DownloadFileAsync(WebRequestData request, string savePath, IProgress<float> progress, CancellationToken ct);
     }
 }

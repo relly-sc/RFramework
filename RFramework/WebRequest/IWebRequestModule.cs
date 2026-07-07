@@ -221,6 +221,26 @@ namespace RFramework.WebRequest
             CancellationToken ct = default);
 
         /// <summary>
+        /// 下载文件到磁盘（适用于大文件，避免全量加载到内存）。
+        /// </summary>
+        /// <param name="url">下载 URL。</param>
+        /// <param name="savePath">保存到磁盘的目标路径。</param>
+        /// <param name="progress">下载进度报告器（0.0 ~ 1.0），可为 null。</param>
+        /// <param name="headers">自定义请求头，可为 null。</param>
+        /// <param name="tag">请求标签，用于批量取消。</param>
+        /// <param name="priority">请求优先级。</param>
+        /// <param name="ct">取消令牌。</param>
+        /// <returns>下载完成 Task。</returns>
+        Task DownloadFileAsync(
+            string url,
+            string savePath,
+            IProgress<float> progress = null,
+            Dictionary<string, string> headers = null,
+            string tag = null,
+            uint priority = 0,
+            CancellationToken ct = default);
+
+        /// <summary>
         /// GET 请求并直接返回 JSON 反序列化后的对象。
         /// 便捷包装：自动设置 Accept: application/json，失败时抛出异常。
         /// </summary>

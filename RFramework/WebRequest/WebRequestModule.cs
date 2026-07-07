@@ -373,6 +373,34 @@ namespace RFramework.WebRequest
         }
 
         /// <inheritdoc/>
+        public async Task DownloadFileAsync(
+            string url,
+            string savePath,
+            IProgress<float> progress = null,
+            Dictionary<string, string> headers = null,
+            string tag = null,
+            uint priority = 0,
+            CancellationToken ct = default)
+        {
+            if (string.IsNullOrEmpty(savePath))
+            {
+                throw new RFrameworkException("WebRequestModule: savePath is invalid.");
+            }
+
+            WebRequestData request = new WebRequestData
+            {
+                Url = url,
+                Method = HttpMethod.Get,
+                Headers = headers,
+                Tag = tag,
+                Priority = priority,
+                TimeoutMs = defaultTimeoutMs
+            };
+
+            await SendCoreDownloadAsync(request, savePath, progress, ct);
+        }
+
+        /// <inheritdoc/>
         public async Task<T> GetJsonAsync<T>(
             string url,
             Dictionary<string, string> queryParams = null,
@@ -760,6 +788,84 @@ namespace RFramework.WebRequest
             }
 
             helper = null;
+        }
+
+        // ====== 下载核心 ======
+
+        /// <summary>
+        /// 流式下载核心：受 SemaphoreSlim 并发控制，直接写入磁盘。
+        /// 不支持重试（大文件重试浪费流量）。
+        /// </summary>
+        private async Task SendCoreDownloadAsync(
+            WebRequestData request,
+            string savePath,
+            IProgress<float> progress,
+            CancellationToken userCt)
+        {
+            if (helper == null)
+            {
+                throw new RFrameworkException("WebRequestModule: helper is not set. Call SetHelper first.");
+            }
+
+            CancellationTokenSource mainCts = null;
+            CancellationTokenSource linkedCts = null;
+            TrackedRequest tracked = null;
+
+            try
+            {
+                mainCts = new CancellationTokenSource();
+                tracked = new TrackedRequest(mainCts, request.Tag);
+
+                lock (trackedRequests)
+                {
+                    trackedRequests.Add(tracked);
+                }
+
+                if (request.TimeoutMs > 0)
+                {
+                    CancellationTokenSource timeoutCts = new CancellationTokenSource(request.TimeoutMs);
+                    linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
+                        userCt, mainCts.Token, timeoutCts.Token);
+                }
+                else
+                {
+                    linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
+                        userCt, mainCts.Token);
+                }
+
+                tracked.SetActive(true);
+                await semaphore.WaitAsync(linkedCts.Token);
+
+                await helper.DownloadFileAsync(request, savePath, progress, linkedCts.Token);
+            }
+            catch (OperationCanceledException)
+            {
+                // 清理下载中的半成品文件
+                if (!userCt.IsCancellationRequested && !(mainCts?.IsCancellationRequested ?? false))
+                {
+                    try { System.IO.File.Delete(savePath); } catch { }
+                }
+
+                throw new RFrameworkException("WebRequestModule: download file cancelled or timeout.");
+            }
+            catch (Exception)
+            {
+                try { System.IO.File.Delete(savePath); } catch { }
+                throw;
+            }
+            finally
+            {
+                try { semaphore.Release(); } catch { }
+                mainCts?.Dispose();
+                linkedCts?.Dispose();
+                lock (trackedRequests)
+                {
+                    if (tracked != null)
+                    {
+                        trackedRequests.Remove(tracked);
+                    }
+                }
+            }
         }
 
         // ====== 内部追踪结构 ======
