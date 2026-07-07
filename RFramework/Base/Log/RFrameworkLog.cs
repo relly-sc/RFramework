@@ -1,8 +1,8 @@
-
 namespace RFramework
 {
     /// <summary>
-    /// 框架日志类
+    /// 框架日志类。
+    /// 所有 Info/Warning/Error 方法始终工作，日志开关由 Runtime 层 Log 类的 ENABLE_LOG 宏统一控制。
     /// </summary>
     public static partial class RFrameworkLog
     {

@@ -137,7 +137,6 @@ namespace RFramework.Pool
 
             if (!active.Remove(obj))
             {
-                RFrameworkLog.Warning(Utility.Text.Format("Object pool '{0}' unspawn object not in active set.", name));
                 return;
             }
 
