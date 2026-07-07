@@ -502,7 +502,6 @@ namespace RFramework.WebRequest
                     try
                     {
                         lastResponse = await helper.SendAsync(request, progress, linkedCts.Token);
-                        break;
                     }
                     catch (OperationCanceledException)
                     {

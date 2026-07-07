@@ -101,7 +101,7 @@ namespace RFramework.Localization
         }
 
         /// <inheritdoc/>
-        public async Task SwitchLanguageAsync(string language)
+        public Task SwitchLanguageAsync(string language)
         {
             if (string.IsNullOrEmpty(language))
             {
@@ -135,6 +135,8 @@ namespace RFramework.Localization
             {
                 eventModule.Fire(new LanguageChangedEvent(previous, language));
             }
+
+            return Task.CompletedTask;
         }
 
         /// <inheritdoc/>
