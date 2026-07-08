@@ -7,16 +7,11 @@ using RFramework.Timer;
 namespace RFramework.Network
 {
     /// <summary>
-    /// 网络模块核心实现。管理单连接的生命周期：
-    /// 连接 → 心跳保活 → 断线自动重连 → 消息分发。
+    /// 网络模块核心实现。作为通道管理器，支持同时管理多个服务器连接。
+    /// 保留默认通道的单连接 API 以向后兼容。
     /// </summary>
     internal sealed class NetworkModule : RFrameworkModule, INetworkModule
     {
-        /// <summary>
-        /// 网络辅助器引用。
-        /// </summary>
-        private INetworkHelper networkHelper;
-
         /// <summary>
         /// 事件模块引用。
         /// </summary>
@@ -28,86 +23,19 @@ namespace RFramework.Network
         private ITimerModule timerModule;
 
         /// <summary>
-        /// 连接状态。
+        /// 所有通道字典：名称 → 通道。
         /// </summary>
-        private bool isConnected;
+        private readonly Dictionary<string, NetworkChannel> channels = new Dictionary<string, NetworkChannel>();
 
         /// <summary>
-        /// 是否正在尝试重连（防止重复重连）。
+        /// 所有通道列表（用于轮询 Update）。
         /// </summary>
-        private bool isReconnecting;
+        private readonly List<NetworkChannel> channelList = new List<NetworkChannel>();
 
         /// <summary>
-        /// 连接过程中被主动断开（不再重连）。
+        /// 默认通道（第一个创建的通道）。
         /// </summary>
-        private bool disposed;
-
-        /// <summary>
-        /// 心跳间隔（秒）。
-        /// </summary>
-        private float heartbeatInterval = 5f;
-
-        /// <summary>
-        /// 是否启用自动重连。
-        /// </summary>
-        private bool autoReconnect = true;
-
-        /// <summary>
-        /// 重连间隔（秒）。
-        /// </summary>
-        private float reconnectInterval = 3f;
-
-        /// <summary>
-        /// 当前 IP 和端口（用于重连）。
-        /// </summary>
-        private string currentIP;
-
-        /// <summary>
-        /// 当前端口。
-        /// </summary>
-        private int currentPort;
-
-        /// <summary>
-        /// 消息处理器：msgId → 处理函数。
-        /// </summary>
-        private readonly Dictionary<int, Action<byte[]>> messageHandlers = new Dictionary<int, Action<byte[]>>();
-
-        /// <summary>
-        /// 心跳计时器引用。
-        /// </summary>
-        private RFramework.Timer.Timer heartbeatTimer;
-
-        /// <summary>
-        /// 重连计时器引用。
-        /// </summary>
-        private RFramework.Timer.Timer reconnectTimer;
-
-        /// <inheritdoc/>
-        public bool IsConnected
-        {
-            get { return isConnected; }
-        }
-
-        /// <inheritdoc/>
-        public float HeartbeatInterval
-        {
-            get { return heartbeatInterval; }
-            set { heartbeatInterval = value; }
-        }
-
-        /// <inheritdoc/>
-        public bool AutoReconnect
-        {
-            get { return autoReconnect; }
-            set { autoReconnect = value; }
-        }
-
-        /// <inheritdoc/>
-        public float ReconnectInterval
-        {
-            get { return reconnectInterval; }
-            set { reconnectInterval = value; }
-        }
+        private NetworkChannel defaultChannel;
 
         /// <inheritdoc/>
         internal override int Priority
@@ -118,21 +46,94 @@ namespace RFramework.Network
             }
         }
 
+        // ====== 多通道管理 ======
+
         /// <inheritdoc/>
-        public void SetHelper(INetworkHelper helper)
+        public INetworkChannel CreateChannel(string name)
         {
-            if (networkHelper != null)
+            if (string.IsNullOrEmpty(name))
             {
-                UnbindHelper();
+                throw new RFrameworkException("Channel name is invalid.");
             }
 
-            networkHelper = helper;
-
-            if (networkHelper != null)
+            if (channels.TryGetValue(name, out NetworkChannel existing))
             {
-                BindHelper();
+                return existing;
             }
+
+            NetworkChannel channel = new NetworkChannel(name, eventModule, timerModule);
+            channels[name] = channel;
+            channelList.Add(channel);
+
+            if (defaultChannel == null)
+            {
+                defaultChannel = channel;
+            }
+
+            return channel;
         }
+
+        /// <inheritdoc/>
+        public INetworkChannel GetChannel(string name)
+        {
+            if (string.IsNullOrEmpty(name))
+            {
+                return null;
+            }
+
+            channels.TryGetValue(name, out NetworkChannel channel);
+            return channel;
+        }
+
+        /// <inheritdoc/>
+        public bool HasChannel(string name)
+        {
+            if (string.IsNullOrEmpty(name))
+            {
+                return false;
+            }
+
+            return channels.ContainsKey(name);
+        }
+
+        /// <inheritdoc/>
+        public bool RemoveChannel(string name)
+        {
+            if (string.IsNullOrEmpty(name))
+            {
+                return false;
+            }
+
+            if (channels.TryGetValue(name, out NetworkChannel channel))
+            {
+                channel.Shutdown();
+                channels.Remove(name);
+                channelList.Remove(channel);
+
+                if (defaultChannel == channel)
+                {
+                    defaultChannel = channelList.Count > 0 ? channelList[0] : null;
+                }
+
+                return true;
+            }
+
+            return false;
+        }
+
+        /// <inheritdoc/>
+        public IReadOnlyList<INetworkChannel> GetAllChannels()
+        {
+            return channelList.AsReadOnly();
+        }
+
+        /// <inheritdoc/>
+        public INetworkChannel DefaultChannel
+        {
+            get { return defaultChannel; }
+        }
+
+        // ====== 依赖注入 ======
 
         /// <inheritdoc/>
         public void SetDependencies(IEventModule eventModule, ITimerModule timerModule)
@@ -141,255 +142,132 @@ namespace RFramework.Network
             this.timerModule = timerModule;
         }
 
+        // ====== 向后兼容：默认通道代理 ======
+
+        /// <inheritdoc/>
+        public bool IsConnected
+        {
+            get { return defaultChannel != null && defaultChannel.IsConnected; }
+        }
+
+        /// <inheritdoc/>
+        public float HeartbeatInterval
+        {
+            get { return defaultChannel != null ? defaultChannel.HeartbeatInterval : 0f; }
+            set
+            {
+                if (defaultChannel != null)
+                {
+                    defaultChannel.HeartbeatInterval = value;
+                }
+            }
+        }
+
+        /// <inheritdoc/>
+        public bool AutoReconnect
+        {
+            get { return defaultChannel != null && defaultChannel.AutoReconnect; }
+            set
+            {
+                if (defaultChannel != null)
+                {
+                    defaultChannel.AutoReconnect = value;
+                }
+            }
+        }
+
+        /// <inheritdoc/>
+        public float ReconnectInterval
+        {
+            get { return defaultChannel != null ? defaultChannel.ReconnectInterval : 0f; }
+            set
+            {
+                if (defaultChannel != null)
+                {
+                    defaultChannel.ReconnectInterval = value;
+                }
+            }
+        }
+
+        /// <inheritdoc/>
+        public void SetHelper(INetworkHelper helper)
+        {
+            EnsureDefaultChannel();
+            defaultChannel.SetHelper(helper);
+        }
+
         /// <inheritdoc/>
         public Task ConnectAsync(string ip, int port, System.Threading.CancellationToken ct = default)
         {
-            if (string.IsNullOrEmpty(ip))
-            {
-                throw new RFrameworkException("IP address is invalid.");
-            }
-
-            if (networkHelper == null)
-            {
-                throw new RFrameworkException("Network helper is not set.");
-            }
-
-            if (isConnected)
-            {
-                return Task.CompletedTask;
-            }
-
-            currentIP = ip;
-            currentPort = port;
-            disposed = false;
-
-            TaskCompletionSource<bool> tcs = new TaskCompletionSource<bool>();
-
-            // 连接成功
-            networkHelper.OnConnected = () =>
-            {
-                isConnected = true;
-                StartHeartbeat();
-                eventModule?.Fire(new NetworkConnectedEvent());
-                tcs.TrySetResult(true);
-            };
-
-            // 连接失败（断开回调在连接未成功时也视为失败）
-            networkHelper.OnDisconnected = () =>
-            {
-                if (!isConnected)
-                {
-                    tcs.TrySetException(new RFrameworkException($"Failed to connect to {ip}:{port}."));
-                    return;
-                }
-
-                HandleDisconnected();
-            };
-
-            // 错误回调
-            networkHelper.OnError = (msg) =>
-            {
-                if (!isConnected)
-                {
-                    tcs.TrySetException(new RFrameworkException($"Connect error: {msg}"));
-                }
-                else
-                {
-                    eventModule?.Fire(new NetworkErrorEvent(msg));
-                }
-            };
-
-            ct.Register(() => tcs.TrySetCanceled());
-
-            try
-            {
-                networkHelper.Connect(ip, port);
-            }
-            catch (Exception ex)
-            {
-                tcs.TrySetException(new RFrameworkException($"Connect exception: {ex.Message}"));
-            }
-
-            return tcs.Task;
+            EnsureDefaultChannel();
+            return defaultChannel.ConnectAsync(ip, port, ct);
         }
 
         /// <inheritdoc/>
         public void Disconnect()
         {
-            disposed = true;
-            StopHeartbeat();
-            if (reconnectTimer != null)
-            {
-                timerModule?.CancelTimer(reconnectTimer);
-                reconnectTimer = null;
-            }
-            isReconnecting = false;
-
-            if (networkHelper != null && isConnected)
-            {
-                networkHelper.Disconnect();
-            }
-
-            isConnected = false;
+            defaultChannel?.Disconnect();
         }
 
         /// <inheritdoc/>
         public void Send(int msgId, byte[] body)
         {
-            if (!isConnected || networkHelper == null)
+            if (defaultChannel == null || !defaultChannel.IsConnected)
             {
-                throw new RFrameworkException("Not connected. Cannot send message.");
+                throw new RFrameworkException("Default channel is not connected. Cannot send message.");
             }
 
-            networkHelper.Send(body);
+            defaultChannel.Send(msgId, body);
         }
 
         /// <inheritdoc/>
         public void RegisterHandler(int msgId, Action<byte[]> handler)
         {
-            messageHandlers[msgId] = handler;
+            EnsureDefaultChannel();
+            defaultChannel.RegisterHandler(msgId, handler);
         }
 
         /// <inheritdoc/>
         public void UnregisterHandler(int msgId)
         {
-            messageHandlers.Remove(msgId);
+            defaultChannel?.UnregisterHandler(msgId);
         }
+
+        // ====== 生命周期 ======
 
         /// <inheritdoc/>
         internal override void Update(float elapseSeconds, float realElapseSeconds)
         {
-            networkHelper?.Update();
+            for (int i = 0; i < channelList.Count; i++)
+            {
+                channelList[i].Update(elapseSeconds, realElapseSeconds);
+            }
         }
 
         /// <inheritdoc/>
         internal override void Shutdown()
         {
-            StopHeartbeat();
-            if (reconnectTimer != null)
+            foreach (NetworkChannel channel in channelList)
             {
-                timerModule?.CancelTimer(reconnectTimer);
-                reconnectTimer = null;
-            }
-            Disconnect();
-            UnbindHelper();
-            messageHandlers.Clear();
-        }
-
-        /// <summary>
-        /// 绑定 Helper 的回调和收包事件。
-        /// </summary>
-        private void BindHelper()
-        {
-            networkHelper.OnReceive = HandleReceive;
-        }
-
-        /// <summary>
-        /// 解绑 Helper 所有回调。
-        /// </summary>
-        private void UnbindHelper()
-        {
-            if (networkHelper != null)
-            {
-                networkHelper.OnReceive = null;
-                networkHelper.OnConnected = null;
-                networkHelper.OnDisconnected = null;
-                networkHelper.OnError = null;
-            }
-        }
-
-        /// <summary>
-        /// 处理收到的消息：按 msgId 路由到注册的处理器。
-        /// </summary>
-        /// <param name="msgId">消息 ID。</param>
-        /// <param name="body">消息体。</param>
-        private void HandleReceive(int msgId, byte[] body)
-        {
-            if (messageHandlers.TryGetValue(msgId, out Action<byte[]> handler))
-            {
-                handler(body);
-            }
-        }
-
-        /// <summary>
-        /// 处理断开连接：启动自动重连（如果启用）。
-        /// </summary>
-        private void HandleDisconnected()
-        {
-            isConnected = false;
-            StopHeartbeat();
-            eventModule?.Fire(new NetworkDisconnectedEvent());
-
-            if (autoReconnect && !disposed && !isReconnecting)
-            {
-                StartReconnect();
-            }
-        }
-
-        /// <summary>
-        /// 启动心跳计时器。
-        /// </summary>
-        private void StartHeartbeat()
-        {
-            if (heartbeatInterval <= 0f || timerModule == null)
-            {
-                return;
+                channel.Shutdown();
             }
 
-            heartbeatTimer = RFramework.Timer.Timer.CreateRepeat(
-                0f,
-                heartbeatInterval,
-                () =>
-                {
-                    if (isConnected)
-                    {
-                        networkHelper?.Send(Array.Empty<byte>());
-                    }
-                });
-            timerModule.RegisterTimer(heartbeatTimer);
+            channels.Clear();
+            channelList.Clear();
+            defaultChannel = null;
         }
 
+        // ====== 内部方法 ======
+
         /// <summary>
-        /// 停止心跳计时器。
+        /// 确保默认通道存在。如果尚未创建任何通道，自动创建名称为 "Default" 的默认通道。
         /// </summary>
-        private void StopHeartbeat()
+        private void EnsureDefaultChannel()
         {
-            if (heartbeatTimer != null)
+            if (defaultChannel == null)
             {
-                timerModule?.CancelTimer(heartbeatTimer);
-                heartbeatTimer = null;
+                CreateChannel("Default");
             }
-        }
-
-        /// <summary>
-        /// 启动自动重连。
-        /// </summary>
-        private void StartReconnect()
-        {
-            isReconnecting = true;
-
-            reconnectTimer = RFramework.Timer.Timer.CreateOnce(
-                reconnectInterval,
-                async () =>
-                {
-                    if (disposed)
-                    {
-                        isReconnecting = false;
-                        return;
-                    }
-
-                    try
-                    {
-                        await ConnectAsync(currentIP, currentPort);
-                        isReconnecting = false;
-                    }
-                    catch
-                    {
-                        // 重连失败，再次尝试
-                        StartReconnect();
-                    }
-                });
-            timerModule?.RegisterTimer(reconnectTimer);
         }
     }
 }
