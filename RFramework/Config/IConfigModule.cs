@@ -26,6 +26,15 @@ namespace RFramework.Config
         void LoadConfig<T>(byte[] configBytes) where T : class;
 
         /// <summary>
+        /// 从 JSON 字符串加载配置表。适用于运行时动态生成配置、编辑器预览等场景。
+        /// JSON 格式应为配置行数组：[{"Id":1,...},{"Id":2,...}]。
+        /// 重复加载相同类型会覆盖旧数据。
+        /// </summary>
+        /// <typeparam name="T">配置行类型。</typeparam>
+        /// <param name="json">JSON 字符串。</param>
+        void LoadConfigFromString<T>(string json) where T : class;
+
+        /// <summary>
         /// 卸载指定类型的配置表。
         /// </summary>
         /// <typeparam name="T">配置行类型。</typeparam>

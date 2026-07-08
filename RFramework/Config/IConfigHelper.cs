@@ -29,6 +29,16 @@ namespace RFramework.Config
         object ParseConfig(Type tableType, byte[] bytes);
 
         /// <summary>
+        /// 从 JSON 字符串解析为强类型配置表对象。
+        /// JSON 格式应为配置行数组：[{"Id":1,...},{"Id":2,...}]。
+        /// 适用于运行时动态生成配置、编辑器预览、单元测试等场景。
+        /// </summary>
+        /// <param name="tableType">表类型（由 GetTableType 返回）。</param>
+        /// <param name="json">JSON 字符串。</param>
+        /// <returns>解析后的配置表对象。</returns>
+        object ParseConfigFromString(Type tableType, string json);
+
+        /// <summary>
         /// 从已解析的配置表中获取指定 ID 的单条配置行。
         /// </summary>
         /// <typeparam name="T">配置行类型。</typeparam>

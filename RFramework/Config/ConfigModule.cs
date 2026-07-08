@@ -111,6 +111,56 @@ namespace RFramework.Config
         // ==================== 配置卸载 ====================
 
         /// <summary>
+        /// 从 JSON 字符串加载配置表。
+        /// 跟随 LoadConfig 的完整流程：映射→解析→缓存→分发事件。
+        /// 重复加载相同类型会覆盖旧数据。
+        /// </summary>
+        /// <typeparam name="T">配置行类型。</typeparam>
+        /// <param name="json">JSON 字符串。</param>
+        public void LoadConfigFromString<T>(string json) where T : class
+        {
+            EnsureHelper();
+
+            Type rowType = typeof(T);
+
+            if (string.IsNullOrEmpty(json))
+            {
+                string errorMsg = $"ConfigModule: LoadConfigFromString<{rowType.Name}> failed: json is empty.";
+                FireLoadFailedEvent(rowType, errorMsg);
+                throw new RFrameworkException(errorMsg);
+            }
+
+            try
+            {
+                Type tableType = helper.GetTableType(rowType);
+                object parsedTable = helper.ParseConfigFromString(tableType, json);
+                configTables[rowType] = parsedTable;
+
+                int rowCount = 0;
+                try
+                {
+                    IReadOnlyList<T> allRows = helper.GetAllConfigs<T>(parsedTable);
+                    rowCount = allRows != null ? allRows.Count : 0;
+                }
+                catch
+                {
+                }
+
+                configRowCounts[rowType] = rowCount;
+                FireLoadSuccessEvent(rowType, rowCount);
+            }
+            catch (Exception ex)
+            {
+                configTables.Remove(rowType);
+                configRowCounts.Remove(rowType);
+                FireLoadFailedEvent(rowType, ex.Message);
+                throw;
+            }
+        }
+
+        // ==================== 配置卸载 ====================
+
+        /// <summary>
         /// 卸载指定类型的配置表。
         /// </summary>
         /// <typeparam name="T">配置行类型。</typeparam>
