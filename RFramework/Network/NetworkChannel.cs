@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.Concurrent;
 using System.Threading;
 using System.Threading.Tasks;
 using RFramework.Event;
@@ -66,6 +67,12 @@ namespace RFramework.Network
         /// 消息处理器：msgId → 处理函数。
         /// </summary>
         private readonly Dictionary<int, Action<byte[]>> messageHandlers = new Dictionary<int, Action<byte[]>>();
+
+        /// <summary>
+        /// 回调马歇尔队列。接收线程/线程池触发的 OnConnected/OnDisconnected/OnError
+        /// 先入队，由主线程 Update 排空后执行，避免跨线程污染 Event/Timer 等主线程模块。
+        /// </summary>
+        private readonly ConcurrentQueue<Action> callbackQueue = new ConcurrentQueue<Action>();
 
         /// <summary>
         /// 心跳计时器引用。
@@ -171,39 +178,48 @@ namespace RFramework.Network
 
             TaskCompletionSource<bool> tcs = new TaskCompletionSource<bool>();
 
-            // 连接成功
+            // 连接成功（统一马歇尔到主线程执行，避免跨线程触碰 Event/Timer）
             networkHelper.OnConnected = () =>
             {
-                isConnected = true;
-                StartHeartbeat();
-                eventModule?.Fire(new NetworkConnectedEvent(Name));
-                tcs.TrySetResult(true);
+                callbackQueue.Enqueue(() =>
+                {
+                    isConnected = true;
+                    StartHeartbeat();
+                    eventModule?.Fire(new NetworkConnectedEvent(Name));
+                    tcs.TrySetResult(true);
+                });
             };
 
             // 连接断开
             networkHelper.OnDisconnected = () =>
             {
-                if (!isConnected)
+                callbackQueue.Enqueue(() =>
                 {
-                    tcs.TrySetException(new RFrameworkException(
-                        string.Format("Failed to connect to {0}:{1} [{2}].", ip, port, Name)));
-                    return;
-                }
+                    if (!isConnected)
+                    {
+                        tcs.TrySetException(new RFrameworkException(
+                            string.Format("Failed to connect to {0}:{1} [{2}].", ip, port, Name)));
+                        return;
+                    }
 
-                HandleDisconnected();
+                    HandleDisconnected();
+                });
             };
 
             // 错误回调
             networkHelper.OnError = (msg) =>
             {
-                if (!isConnected)
+                callbackQueue.Enqueue(() =>
                 {
-                    tcs.TrySetException(new RFrameworkException(string.Format("Connect error [{0}]: {1}", Name, msg)));
-                }
-                else
-                {
-                    eventModule?.Fire(new NetworkErrorEvent(Name, msg));
-                }
+                    if (!isConnected)
+                    {
+                        tcs.TrySetException(new RFrameworkException(string.Format("Connect error [{0}]: {1}", Name, msg)));
+                    }
+                    else
+                    {
+                        eventModule?.Fire(new NetworkErrorEvent(Name, msg));
+                    }
+                });
             };
 
             ct.Register(() => tcs.TrySetCanceled());
@@ -246,7 +262,7 @@ namespace RFramework.Network
                     string.Format("Channel '{0}' is not connected. Cannot send message.", Name));
             }
 
-            networkHelper.Send(body);
+            networkHelper.Send(msgId, body);
         }
 
         /// <inheritdoc/>
@@ -265,6 +281,12 @@ namespace RFramework.Network
         public void Update(float elapseSeconds, float realElapseSeconds)
         {
             networkHelper?.Update();
+
+            // 主线程排空回调队列（OnConnected/OnDisconnected/OnError 在此执行）
+            while (callbackQueue.TryDequeue(out Action callback))
+            {
+                callback();
+            }
         }
 
         /// <inheritdoc/>
@@ -275,6 +297,11 @@ namespace RFramework.Network
             Disconnect();
             UnbindHelper();
             messageHandlers.Clear();
+
+            // 清空未执行的马歇尔回调，避免关闭后误触发
+            while (callbackQueue.TryDequeue(out _))
+            {
+            }
         }
 
         // ====== 内部方法 ======
@@ -346,7 +373,8 @@ namespace RFramework.Network
                 {
                     if (isConnected)
                     {
-                        networkHelper?.Send(Array.Empty<byte>());
+                        // 心跳：msgId 0 + 空 body，各 Helper 按自身帧协议封装
+                        networkHelper?.Send(0, Array.Empty<byte>());
                     }
                 });
             timerModule.RegisterTimer(heartbeatTimer);

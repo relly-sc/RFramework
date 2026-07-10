@@ -332,11 +332,12 @@ namespace RFramework.Resource
         /// 异步加载场景。
         /// </summary>
         /// <param name="location">场景资源路径。</param>
-        /// <param name="sceneMode">场景加载模式。</param>
+        /// <param name="sceneMode">场景加载模式：0=Single 替换当前场景，1=Additive 叠加到当前场景（与 UnityEngine.SceneManagement.LoadSceneMode 值一致）。</param>
         /// <param name="activateOnLoad">是否加载完成后立即激活。</param>
         /// <param name="priority">加载优先级。</param>
-        public async Task LoadSceneAsync(string location, SceneLoadMode sceneMode = SceneLoadMode.Single,
-            bool activateOnLoad = true, uint priority = 0)
+        /// <param name="onProgress">进度回调（0~1），可为 null。</param>
+        public async Task LoadSceneAsync(string location, int sceneMode = 0,
+            bool activateOnLoad = true, uint priority = 0, IProgress<float> onProgress = null)
         {
             EnsureInitialized();
 
@@ -347,7 +348,7 @@ namespace RFramework.Resource
 
             try
             {
-                await helper.LoadSceneAsync(location, sceneMode, activateOnLoad, priority);
+                await helper.LoadSceneAsync(location, sceneMode, activateOnLoad, priority, onProgress);
                 loadedScenes.Add(location);
             }
             catch (Exception ex)

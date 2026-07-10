@@ -81,14 +81,15 @@ namespace RFramework.Scene
         /// 异步加载场景。同一场景不可重复加载（需先 UnloadSceneAsync）。
         /// </summary>
         /// <param name="assetName">场景资源路径。</param>
-        /// <param name="sceneMode">加载模式。</param>
+        /// <param name="sceneMode">加载模式：0=Single 替换当前场景，1=Additive 叠加到当前场景（与 UnityEngine.SceneManagement.LoadSceneMode 值一致）。</param>
         /// <param name="activateOnLoad">是否加载完成后立即激活。</param>
         /// <param name="priority">加载优先级。</param>
+        /// <param name="onProgress">进度回调（0~1），可为 null。</param>
         /// <param name="userData">用户自定义数据。</param>
         /// <param name="ct">取消令牌。</param>
-        public async Task LoadSceneAsync(string assetName, SceneLoadMode sceneMode = SceneLoadMode.Single,
-            bool activateOnLoad = true, uint priority = 0, object userData = null,
-            CancellationToken ct = default)
+        public async Task LoadSceneAsync(string assetName, int sceneMode = 0,
+            bool activateOnLoad = true, uint priority = 0, IProgress<float> onProgress = null,
+            object userData = null, CancellationToken ct = default)
         {
             if (string.IsNullOrEmpty(assetName))
             {
@@ -120,13 +121,13 @@ namespace RFramework.Scene
 
             try
             {
-                await resourceModule.LoadSceneAsync(assetName, sceneMode, activateOnLoad, priority);
+                await resourceModule.LoadSceneAsync(assetName, sceneMode, activateOnLoad, priority, onProgress);
 
                 loadingSceneNames.Remove(assetName);
                 loadedSceneNames.Add(assetName);
 
                 // Single 模式替换当前主场景
-                if (sceneMode == SceneLoadMode.Single)
+                if (sceneMode == 0)
                 {
                     string previousScene = CurrentSceneName;
                     CurrentSceneName = assetName;

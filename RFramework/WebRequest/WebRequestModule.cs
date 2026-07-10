@@ -103,7 +103,9 @@ namespace RFramework.WebRequest
             }
 
             maxConcurrentRequests = max;
-            semaphore = new SemaphoreSlim(max, max);
+
+            // max <= 0 表示无限制：不创建信号量，SendCore 跳过 Wait/Release（避免 SemaphoreSlim(0,0) 死锁）
+            semaphore = max <= 0 ? null : new SemaphoreSlim(max, max);
         }
 
         /// <inheritdoc/>
@@ -463,6 +465,7 @@ namespace RFramework.WebRequest
             CancellationTokenSource mainCts = null;
             CancellationTokenSource linkedCts = null;
             TrackedRequest tracked = null;
+            bool acquiredSlot = false;
 
             try
             {
@@ -489,9 +492,13 @@ namespace RFramework.WebRequest
                         userCt, mainCts.Token);
                 }
 
-                // 4. 等待并发槽位
+                // 4. 等待并发槽位（无限制模式下 semaphore 为 null，直接放行）
                 tracked.SetActive(true);
-                await semaphore.WaitAsync(linkedCts.Token);
+                if (semaphore != null)
+                {
+                    await semaphore.WaitAsync(linkedCts.Token);
+                    acquiredSlot = true;
+                }
 
                 // 5. 带重试的请求循环
                 WebResponse lastResponse = null;
@@ -553,18 +560,9 @@ namespace RFramework.WebRequest
                     }
                 }
 
-                // 释放并发槽位
-                if (mainCts != null)
+                // 仅当成功获取槽位时才释放，避免释放未持有的槽位污染计数
+                if (acquiredSlot && semaphore != null)
                 {
-                    try
-                    {
-                        mainCts.Dispose();
-                    }
-                    catch
-                    {
-                        // 忽略
-                    }
-
                     try
                     {
                         semaphore.Release();
@@ -576,6 +574,19 @@ namespace RFramework.WebRequest
                     catch (SemaphoreFullException)
                     {
                         // 已释放过
+                    }
+                }
+
+                // 释放主 CTS（与槽位释放解耦，无论是否获取槽位都需清理）
+                if (mainCts != null)
+                {
+                    try
+                    {
+                        mainCts.Dispose();
+                    }
+                    catch
+                    {
+                        // 忽略
                     }
                 }
             }
@@ -809,6 +820,7 @@ namespace RFramework.WebRequest
             CancellationTokenSource mainCts = null;
             CancellationTokenSource linkedCts = null;
             TrackedRequest tracked = null;
+            bool acquiredSlot = false;
 
             try
             {
@@ -833,7 +845,11 @@ namespace RFramework.WebRequest
                 }
 
                 tracked.SetActive(true);
-                await semaphore.WaitAsync(linkedCts.Token);
+                if (semaphore != null)
+                {
+                    await semaphore.WaitAsync(linkedCts.Token);
+                    acquiredSlot = true;
+                }
 
                 await helper.DownloadFileAsync(request, savePath, progress, linkedCts.Token);
             }
@@ -854,7 +870,10 @@ namespace RFramework.WebRequest
             }
             finally
             {
-                try { semaphore.Release(); } catch { }
+                if (acquiredSlot && semaphore != null)
+                {
+                    try { semaphore.Release(); } catch { }
+                }
                 mainCts?.Dispose();
                 linkedCts?.Dispose();
                 lock (trackedRequests)

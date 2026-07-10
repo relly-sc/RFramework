@@ -20,16 +20,4 @@ namespace RFramework.Resource
         /// </summary>
         Host = 2
     }
-
-    /// <summary>
-    /// 场景加载模式。与常见引擎的加载模式值保持一致，Runtime 辅助器负责映射到底层引擎。
-    /// </summary>
-    public enum SceneLoadMode
-    {
-        /// <summary>替换当前场景</summary>
-        Single = 0,
-
-        /// <summary>叠加到当前场景</summary>
-        Additive = 1
-    }
 }

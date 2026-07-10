@@ -19,10 +19,13 @@ namespace RFramework.Network
         void Disconnect();
 
         /// <summary>
-        /// 发送原始数据到网络层。
+        /// 发送消息。由具体 Helper 按各自帧协议封装后发出：
+        /// TCP = [4B 包长][4B msgId][body]，UDP/WebSocket = [4B msgId][body]。
+        /// 帧协议属于各 Helper（见框架设计文档），通道只透传 msgId 与 body。
         /// </summary>
-        /// <param name="data">待发送的字节数据。</param>
-        void Send(byte[] data);
+        /// <param name="msgId">消息 ID。</param>
+        /// <param name="body">消息体字节数据（可为 null 或空数组）。</param>
+        void Send(int msgId, byte[] body);
 
         /// <summary>
         /// 每帧轮询，检查收包并解码。收到完整包时触发 OnReceive 回调。

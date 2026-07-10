@@ -62,12 +62,19 @@ namespace RFramework.Event
         /// </summary>
         internal override void Update(float elapseSeconds, float realElapseSeconds)
         {
+            // 持锁仅做出队，释放锁后再执行回调，避免持锁期间阻塞 FireAsync 入队或死锁
+            List<Action> toInvoke = new List<Action>();
             lock (queueLock)
             {
                 while (asyncQueue.Count > 0)
                 {
-                    asyncQueue.Dequeue().Invoke();
+                    toInvoke.Add(asyncQueue.Dequeue());
                 }
+            }
+
+            for (int i = 0; i < toInvoke.Count; i++)
+            {
+                toInvoke[i].Invoke();
             }
         }
 
@@ -307,22 +314,49 @@ namespace RFramework.Event
 
             int token = ++iterationToken;
             LinkedListNode<Delegate> node = list.First;
+            Exception dispatchError = null;
 
-            while (node != null)
+            try
             {
-                // 缓存当前节点下一个为 token 对应值，后续 Unsubscribe 可能修改它
-                cachedNodes[token] = node.Next;
-
-                ((Action<T>)node.Value)(args);
-
-                // 从缓存取 next（可能已被 Unsubscribe 修改为 skip 被删节点）
-                if (!cachedNodes.TryGetValue(token, out node))
+                while (node != null)
                 {
-                    break;
+                    // 缓存当前节点下一个为 token 对应值，后续 Unsubscribe 可能修改它
+                    cachedNodes[token] = node.Next;
+
+                    try
+                    {
+                        ((Action<T>)node.Value)(args);
+                    }
+                    catch (Exception ex)
+                    {
+                        // 单个 handler 异常不应中断其他订阅者：暂存首个异常并继续派发
+                        if (dispatchError == null)
+                        {
+                            dispatchError = ex;
+                        }
+                    }
+
+                    // 从缓存取 next（可能已被 Unsubscribe 修改为 skip 被删节点）
+                    if (!cachedNodes.TryGetValue(token, out node))
+                    {
+                        break;
+                    }
                 }
             }
+            finally
+            {
+                // 确保无论是否异常都清理 token 条目，避免 cachedNodes 泄漏
+                cachedNodes.Remove(token);
+            }
 
-            cachedNodes.Remove(token);
+            // 派发过程中有 handler 抛异常：按框架约定以 RFrameworkException 上报，
+            // 由 Runtime 层（EventComponent.Fire / BaseComponent.Update）捕获并写日志。
+            if (dispatchError != null)
+            {
+                throw new RFrameworkException(
+                    Utility.Text.Format("EventModule: handler for [{0}] threw exception.", type.FullName),
+                    dispatchError);
+            }
         }
     }
 }
