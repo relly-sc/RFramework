@@ -105,7 +105,10 @@ namespace RFramework.WebRequest
             maxConcurrentRequests = max;
 
             // max <= 0 表示无限制：不创建信号量，SendCore 跳过 Wait/Release（避免 SemaphoreSlim(0,0) 死锁）
+            // 仅在框架初始化阶段调用本方法：此时无在途请求，可安全释放旧信号量
+            SemaphoreSlim old = semaphore;
             semaphore = max <= 0 ? null : new SemaphoreSlim(max, max);
+            old?.Dispose();
         }
 
         /// <inheritdoc/>
@@ -464,8 +467,10 @@ namespace RFramework.WebRequest
 
             CancellationTokenSource mainCts = null;
             CancellationTokenSource linkedCts = null;
+            CancellationTokenSource timeoutCts = null;
             TrackedRequest tracked = null;
             bool acquiredSlot = false;
+            SemaphoreSlim sem = null;
 
             try
             {
@@ -482,7 +487,7 @@ namespace RFramework.WebRequest
                 // 3. 链接用户 CTS + 超时 CTS + 主 CTS
                 if (request.TimeoutMs > 0)
                 {
-                    CancellationTokenSource timeoutCts = new CancellationTokenSource(request.TimeoutMs);
+                    timeoutCts = new CancellationTokenSource(request.TimeoutMs);
                     linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
                         userCt, mainCts.Token, timeoutCts.Token);
                 }
@@ -493,10 +498,12 @@ namespace RFramework.WebRequest
                 }
 
                 // 4. 等待并发槽位（无限制模式下 semaphore 为 null，直接放行）
+                // 捕获本地引用，保证 Wait 与 Release 作用于同一实例（避免运行时替换 semaphore 导致释放到错误实例）
                 tracked.SetActive(true);
-                if (semaphore != null)
+                sem = semaphore;
+                if (sem != null)
                 {
-                    await semaphore.WaitAsync(linkedCts.Token);
+                    await sem.WaitAsync(linkedCts.Token);
                     acquiredSlot = true;
                 }
 
@@ -551,6 +558,9 @@ namespace RFramework.WebRequest
                     linkedCts.Dispose();
                 }
 
+                // 超时 CTS 独立创建，需显式释放，否则每次带超时的请求都泄漏一个带定时器的 CTS
+                timeoutCts?.Dispose();
+
                 // 从追踪列表移除
                 lock (trackedRequests)
                 {
@@ -561,11 +571,11 @@ namespace RFramework.WebRequest
                 }
 
                 // 仅当成功获取槽位时才释放，避免释放未持有的槽位污染计数
-                if (acquiredSlot && semaphore != null)
+                if (acquiredSlot && sem != null)
                 {
                     try
                     {
-                        semaphore.Release();
+                        sem.Release();
                     }
                     catch (ObjectDisposedException)
                     {
@@ -819,8 +829,10 @@ namespace RFramework.WebRequest
 
             CancellationTokenSource mainCts = null;
             CancellationTokenSource linkedCts = null;
+            CancellationTokenSource timeoutCts = null;
             TrackedRequest tracked = null;
             bool acquiredSlot = false;
+            SemaphoreSlim sem = null;
 
             try
             {
@@ -834,7 +846,7 @@ namespace RFramework.WebRequest
 
                 if (request.TimeoutMs > 0)
                 {
-                    CancellationTokenSource timeoutCts = new CancellationTokenSource(request.TimeoutMs);
+                    timeoutCts = new CancellationTokenSource(request.TimeoutMs);
                     linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
                         userCt, mainCts.Token, timeoutCts.Token);
                 }
@@ -844,10 +856,12 @@ namespace RFramework.WebRequest
                         userCt, mainCts.Token);
                 }
 
+                // 捕获本地引用，保证 Wait 与 Release 作用于同一实例（避免运行时替换 semaphore 导致释放到错误实例）
                 tracked.SetActive(true);
-                if (semaphore != null)
+                sem = semaphore;
+                if (sem != null)
                 {
-                    await semaphore.WaitAsync(linkedCts.Token);
+                    await sem.WaitAsync(linkedCts.Token);
                     acquiredSlot = true;
                 }
 
@@ -870,12 +884,14 @@ namespace RFramework.WebRequest
             }
             finally
             {
-                if (acquiredSlot && semaphore != null)
+                if (acquiredSlot && sem != null)
                 {
-                    try { semaphore.Release(); } catch { }
+                    try { sem.Release(); } catch { }
                 }
                 mainCts?.Dispose();
                 linkedCts?.Dispose();
+                // 超时 CTS 独立创建，需显式释放
+                timeoutCts?.Dispose();
                 lock (trackedRequests)
                 {
                     if (tracked != null)
