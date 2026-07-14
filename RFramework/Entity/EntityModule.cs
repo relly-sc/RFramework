@@ -82,8 +82,8 @@ namespace RFramework.Entity
 
         /// <summary>
         /// 获取框架模块优先级。
-        /// EntityModule 依赖 ResourceModule（Priority=20）加载资源，
-        /// 因此 Priority=25 确保 Resource 先 Update、Entity 后 Update。
+        /// EntityModule 依赖 ResourceModule（Priority=50）加载资源，
+        /// 因此 Priority=25 确保 Resource 先 Update、Entity 后 Update，关闭时 Entity 先释放资源引用。
         /// </summary>
         internal override int Priority
         {
@@ -327,7 +327,7 @@ namespace RFramework.Entity
                 // 分发失败事件
                 if (eventModule != null)
                 {
-                    eventModule.Fire(new ShowEntityFailureEvent(entityId, assetName,
+                    eventModule.FireSafely(new ShowEntityFailureEvent(entityId, assetName,
                         ex.Message, userData));
                 }
 
@@ -370,7 +370,7 @@ namespace RFramework.Entity
             // 分发成功事件
             if (eventModule != null)
             {
-                eventModule.Fire(new ShowEntitySuccessEvent(entity, duration, userData));
+                eventModule.FireSafely(new ShowEntitySuccessEvent(entity, duration, userData));
             }
 
             return entity;
@@ -445,7 +445,7 @@ namespace RFramework.Entity
             // 分发隐藏完成事件
             if (eventModule != null)
             {
-                eventModule.Fire(new HideEntityCompleteEvent(entity.Id, entity.AssetName,
+                eventModule.FireSafely(new HideEntityCompleteEvent(entity.Id, entity.AssetName,
                     entity.Group.Name, userData));
             }
 

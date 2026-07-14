@@ -13,7 +13,7 @@ namespace RFramework.Config
     {
         /// <summary>
         /// 获取框架模块优先级。
-        /// 高于 Resource(20)，确保配置模块在资源之后初始化。
+        /// 低于 Resource(50)，确保资源模块先更新，关闭时配置先释放。
         /// </summary>
         internal override int Priority
         {
@@ -399,7 +399,7 @@ namespace RFramework.Config
             }
 
             ConfigLoadSuccessEvent successEvent = new ConfigLoadSuccessEvent(configType, rowCount);
-            evt.Fire(successEvent);
+            evt.FireSafely(successEvent);
         }
 
         /// <summary>
@@ -417,7 +417,7 @@ namespace RFramework.Config
             }
 
             ConfigLoadFailedEvent failedEvent = new ConfigLoadFailedEvent(configType, errorMessage);
-            evt.Fire(failedEvent);
+            evt.FireSafely(failedEvent);
         }
     }
 }

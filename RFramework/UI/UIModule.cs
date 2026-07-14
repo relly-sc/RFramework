@@ -183,7 +183,7 @@ namespace RFramework.UI
 
                 if (eventModule != null)
                 {
-                    eventModule.Fire(new OpenUIFormSuccessEvent(assetName, uiForm, duration, userData));
+                    eventModule.FireSafely(new OpenUIFormSuccessEvent(assetName, uiForm, duration, userData));
                 }
 
                 return uiForm;
@@ -215,7 +215,7 @@ namespace RFramework.UI
                 // 取消（含加载中关闭）属正常流程，不视为失败事件
                 if (!(ex is OperationCanceledException) && eventModule != null)
                 {
-                    eventModule.Fire(new OpenUIFormFailureEvent(assetName, ex.Message, userData));
+                    eventModule.FireSafely(new OpenUIFormFailureEvent(assetName, ex.Message, userData));
                 }
 
                 throw;
@@ -261,7 +261,7 @@ namespace RFramework.UI
 
             if (eventModule != null)
             {
-                eventModule.Fire(new CloseUIFormCompleteEvent(assetName, userData));
+                eventModule.FireSafely(new CloseUIFormCompleteEvent(assetName, userData));
             }
         }
 

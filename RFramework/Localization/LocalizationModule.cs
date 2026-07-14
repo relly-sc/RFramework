@@ -133,7 +133,7 @@ namespace RFramework.Localization
             // 分发事件
             if (eventModule != null && previous != null && previous != language)
             {
-                eventModule.Fire(new LanguageChangedEvent(previous, language));
+                eventModule.FireSafely(new LanguageChangedEvent(previous, language));
             }
 
             return Task.CompletedTask;

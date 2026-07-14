@@ -65,6 +65,14 @@ namespace RFramework.Event
         void Fire<T>(T args);
 
         /// <summary>
+        /// 同步分发事件，但隔离订阅者异常。
+        /// 用于模块生命周期通知：订阅者失败不会回滚已经完成的模块操作。
+        /// </summary>
+        /// <typeparam name="T">事件消息类型。</typeparam>
+        /// <param name="args">事件消息实例。</param>
+        void FireSafely<T>(T args);
+
+        /// <summary>
         /// 异步分发事件（线程安全）。
         /// 事件进入线程安全队列，在下一帧的 Update 中由主线程统一分发。
         /// 支持从任意线程安全调用。

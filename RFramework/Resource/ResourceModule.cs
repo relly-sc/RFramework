@@ -16,11 +16,12 @@ namespace RFramework.Resource
     {
         /// <summary>
         /// 获取框架模块优先级。
-        /// 高于 Timer(10)，确保资源加载在计时器之后初始化。
+        /// 资源是配置、场景、实体、UI、音频和本地化的共同依赖。
+        /// 高优先级使其先于消费者更新，并在关闭时最后释放。
         /// </summary>
         internal override int Priority
         {
-            get { return 20; }
+            get { return 50; }
         }
 
         // ==================== 依赖注入 ====================
@@ -47,6 +48,9 @@ namespace RFramework.Resource
 
         /// <summary>是否已完成初始化</summary>
         private bool isInitialized;
+
+        /// <summary>当前初始化任务。并发调用共享同一初始化流程。</summary>
+        private Task initializationTask;
 
         /// <summary>是否已进入关闭流程。置位后新加载请求直接失败，在飞加载续体不再写回缓存。</summary>
         private bool isShutdown;
@@ -206,17 +210,48 @@ namespace RFramework.Resource
         /// 初始化资源系统。调用前必须先设置 PlayMode、RemoteServiceUrl 和 Helper。
         /// 异步等待资源系统初始化、资源包裹创建及文件系统挂载完成。
         /// </summary>
-        public async Task InitializeAsync()
+        public Task InitializeAsync()
         {
             if (isInitialized)
             {
-                return;
+                return Task.CompletedTask;
             }
 
-            EnsureHelper();
+            if (initializationTask != null)
+            {
+                return initializationTask;
+            }
 
-            await helper.InitializeAsync(packageName, playMode, defaultHostServer, fallbackHostServer);
-            isInitialized = true;
+            initializationTask = InitializeInternalAsync();
+            return initializationTask;
+        }
+
+        private async Task InitializeInternalAsync()
+        {
+            try
+            {
+                if (isShutdown)
+                {
+                    throw new ObjectDisposedException(nameof(ResourceModule));
+                }
+
+                EnsureHelper();
+                await helper.InitializeAsync(packageName, playMode, defaultHostServer, fallbackHostServer);
+
+                if (isShutdown)
+                {
+                    throw new ObjectDisposedException(nameof(ResourceModule));
+                }
+
+                isInitialized = true;
+            }
+            finally
+            {
+                if (!isInitialized)
+                {
+                    initializationTask = null;
+                }
+            }
         }
 
         // ==================== 资源加载 ====================
@@ -480,7 +515,7 @@ namespace RFramework.Resource
             catch (Exception ex)
             {
                 SceneLoadFailedEvent failedEvent = new SceneLoadFailedEvent(location, ex.Message);
-                GetEventModule()?.Fire(failedEvent);
+                GetEventModule()?.FireSafely(failedEvent);
                 throw;
             }
         }
@@ -729,6 +764,7 @@ namespace RFramework.Resource
             // 销毁底层资源系统（释放所有场景句柄、移除资源包裹并销毁辅助器）。
             helper?.Destroy();
             isInitialized = false;
+            initializationTask = null;
 
             moduleCts.Dispose();
         }
@@ -909,7 +945,7 @@ namespace RFramework.Resource
             }
 
             ResourceLoadFailedEvent failedEvent = new ResourceLoadFailedEvent(location, typeof(T), errorMessage);
-            evt.Fire(failedEvent);
+            evt.FireSafely(failedEvent);
         }
     }
 }

@@ -21,6 +21,7 @@ namespace RFramework.Pool
         private readonly Action<T> onDestroy;
         private readonly int capacity;
         private readonly bool autoPoolable;
+        private bool isClearing;
 
         /// <summary>
         /// 初始化对象池的新实例。
@@ -106,6 +107,12 @@ namespace RFramework.Pool
         /// <returns>获取到的对象。</returns>
         public T Spawn()
         {
+            if (isClearing)
+            {
+                throw new RFrameworkException(Utility.Text.Format(
+                    "Object pool '{0}' can not spawn objects while it is clearing.", name));
+            }
+
             T obj;
             if (available.Count > 0)
             {
@@ -136,6 +143,11 @@ namespace RFramework.Pool
                 throw new RFrameworkException("Can not unspawn null object.");
             }
 
+            if (isClearing)
+            {
+                return;
+            }
+
             if (!active.Remove(obj))
             {
                 return;
@@ -164,7 +176,13 @@ namespace RFramework.Pool
                 return;
             }
 
-            int createCount = count - available.Count;
+            int targetCount = Math.Min(count, capacity);
+            int createCount = targetCount - available.Count - active.Count;
+            if (createCount <= 0)
+            {
+                return;
+            }
+
             for (int i = 0; i < createCount; i++)
             {
                 T obj = createFunc();
@@ -195,17 +213,33 @@ namespace RFramework.Pool
         /// </summary>
         public void Clear()
         {
-            // 先销毁活跃对象（快照遍历，避免 DestroyObject 回调反向修改 active 集合导致 InvalidOperationException）
-            T[] activeSnapshot = active.ToArray();
-            foreach (T obj in activeSnapshot)
+            if (isClearing)
             {
-                DestroyObject(obj);
+                return;
             }
 
-            active.Clear();
+            isClearing = true;
+            try
+            {
+                T[] activeSnapshot = active.ToArray();
+                T[] availableSnapshot = available.ToArray();
+                active.Clear();
+                available.Clear();
 
-            // 再销毁可用对象
-            ReleaseUnused();
+                foreach (T obj in activeSnapshot)
+                {
+                    DestroyObject(obj);
+                }
+
+                foreach (T obj in availableSnapshot)
+                {
+                    DestroyObject(obj);
+                }
+            }
+            finally
+            {
+                isClearing = false;
+            }
         }
 
         /// <summary>

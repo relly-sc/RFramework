@@ -298,7 +298,12 @@ namespace RFramework.Audio
                 throw new RFrameworkException("Resource module is not set.");
             }
 
-            object audioAsset = audioHelper.LoadAudioAsset(assetName);
+            object audioAsset = resourceModule.LoadAssetSync<object>(assetName);
+            if (audioAsset == null)
+            {
+                throw new RFrameworkException($"Audio asset '{assetName}' could not be loaded.");
+            }
+
             loadedAudioAssets.Add(assetName, audioAsset);
             return audioAsset;
         }
@@ -343,11 +348,11 @@ namespace RFramework.Audio
         /// </summary>
         private void UnloadAllAssets()
         {
-            if (audioHelper != null)
+            if (resourceModule != null)
             {
                 foreach (KeyValuePair<string, object> kv in loadedAudioAssets)
                 {
-                    audioHelper.ReleaseAudioAsset(kv.Value);
+                    resourceModule.UnloadAsset<object>(kv.Key);
                 }
             }
 

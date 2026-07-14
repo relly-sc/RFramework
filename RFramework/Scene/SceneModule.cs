@@ -45,7 +45,7 @@ namespace RFramework.Scene
 
         /// <summary>
         /// 获取框架模块优先级。
-        /// SceneModule Priority=15，在 Resource(20) 之后。
+        /// SceneModule Priority=15，在 Resource(50) 之后更新、之前关闭。
         /// </summary>
         internal override int Priority
         {
@@ -163,7 +163,7 @@ namespace RFramework.Scene
                 // 分发成功事件
                 if (eventModule != null)
                 {
-                    eventModule.Fire(new LoadSceneSuccessEvent(assetName, duration, userData));
+                    eventModule.FireSafely(new LoadSceneSuccessEvent(assetName, duration, userData));
                 }
 
                 if (sceneMode == 0)
@@ -182,7 +182,7 @@ namespace RFramework.Scene
                 // 分发失败事件
                 if (eventModule != null)
                 {
-                    eventModule.Fire(new LoadSceneFailureEvent(assetName, ex.Message, userData));
+                    eventModule.FireSafely(new LoadSceneFailureEvent(assetName, ex.Message, userData));
                 }
 
                 throw;
@@ -244,7 +244,7 @@ namespace RFramework.Scene
                 // 分发卸载成功事件
                 if (eventModule != null)
                 {
-                    eventModule.Fire(new UnloadSceneSuccessEvent(assetName, userData));
+                    eventModule.FireSafely(new UnloadSceneSuccessEvent(assetName, userData));
                 }
             }
             catch (Exception)
@@ -361,7 +361,7 @@ namespace RFramework.Scene
         /// </summary>
         internal override void Shutdown()
         {
-            // 关闭阶段跳过异步卸载：本模块优先级(15)低于 Resource(20)，
+            // 关闭阶段跳过异步卸载：本模块优先级(15)低于 Resource(50)，
             // 若在此 fire-and-forget 触发卸载，会与 ResourceModule 的 Shutdown/资源销毁
             // 形成并发竞态，且底层辅助器可能在卸载完成前即被销毁导致异常被吞。
             // 因此仅清理场景簿记，底层场景句柄由 ResourceModule.Destroy 统一回收。

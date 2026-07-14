@@ -296,6 +296,22 @@ namespace RFramework.Event
             Dispatch(args);
         }
 
+        /// <inheritdoc/>
+        public void FireSafely<T>(T args)
+        {
+            try
+            {
+                Dispatch(args);
+            }
+            catch (Exception ex)
+            {
+                if (RFrameworkLog.IsInitialized)
+                {
+                    RFrameworkLog.Error(ex);
+                }
+            }
+        }
+
         /// <summary>
         /// 异步分发事件（线程安全）。
         /// 事件进入队列，在下一帧 Update 中由主线程分发。

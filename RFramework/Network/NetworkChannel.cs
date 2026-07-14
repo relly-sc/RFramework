@@ -78,6 +78,10 @@ namespace RFramework.Network
         /// 先入队，由主线程 Update 排空后执行，避免跨线程污染 Event/Timer 等主线程模块。
         /// </summary>
         private readonly ConcurrentQueue<Action> callbackQueue = new ConcurrentQueue<Action>();
+        private const int MaxQueuedCallbacks = 1024;
+        private const int MaxCallbacksPerUpdate = 128;
+        private int queuedCallbackCount;
+        private int callbackOverflowReported;
 
         /// <summary>
         /// 心跳计时器引用。
@@ -200,21 +204,21 @@ namespace RFramework.Network
             // 连接成功（统一马歇尔到主线程执行，避免跨线程触碰 Event/Timer）
             networkHelper.OnConnected = () =>
             {
-                callbackQueue.Enqueue(() =>
+                EnqueueCallback(() =>
                 {
                     isConnecting = false;
                     isConnected = true;
                     cancelReg.Dispose();
                     StartHeartbeat();
-                    eventModule?.Fire(new NetworkConnectedEvent(Name));
+                    eventModule?.FireSafely(new NetworkConnectedEvent(Name));
                     tcs.TrySetResult(true);
-                });
+                }, true);
             };
 
             // 连接断开
             networkHelper.OnDisconnected = () =>
             {
-                callbackQueue.Enqueue(() =>
+                EnqueueCallback(() =>
                 {
                     if (!isConnected)
                     {
@@ -232,13 +236,13 @@ namespace RFramework.Network
                     }
 
                     HandleDisconnected();
-                });
+                }, true);
             };
 
             // 错误回调
             networkHelper.OnError = (msg) =>
             {
-                callbackQueue.Enqueue(() =>
+                EnqueueCallback(() =>
                 {
                     if (!isConnected)
                     {
@@ -248,9 +252,9 @@ namespace RFramework.Network
                     }
                     else
                     {
-                        eventModule?.Fire(new NetworkErrorEvent(Name, msg));
+                        eventModule?.FireSafely(new NetworkErrorEvent(Name, msg));
                     }
-                });
+                }, isConnecting);
             };
 
             try
@@ -287,7 +291,7 @@ namespace RFramework.Network
 
             if (wasConnected)
             {
-                eventModule?.Fire(new NetworkDisconnectedEvent(Name));
+                eventModule?.FireSafely(new NetworkDisconnectedEvent(Name));
             }
         }
 
@@ -337,9 +341,17 @@ namespace RFramework.Network
             networkHelper?.Update();
 
             // 主线程排空回调队列（OnConnected/OnDisconnected/OnError 在此执行）
-            while (callbackQueue.TryDequeue(out Action callback))
+            int processed = 0;
+            while (processed < MaxCallbacksPerUpdate && callbackQueue.TryDequeue(out Action callback))
             {
+                Interlocked.Decrement(ref queuedCallbackCount);
                 callback();
+                processed++;
+            }
+
+            if (Volatile.Read(ref queuedCallbackCount) < MaxQueuedCallbacks)
+            {
+                Interlocked.Exchange(ref callbackOverflowReported, 0);
             }
         }
 
@@ -355,10 +367,33 @@ namespace RFramework.Network
             // 清空未执行的马歇尔回调，避免关闭后误触发
             while (callbackQueue.TryDequeue(out _))
             {
+                Interlocked.Decrement(ref queuedCallbackCount);
             }
         }
 
         // ====== 内部方法 ======
+
+        private void EnqueueCallback(Action callback, bool isCritical = false)
+        {
+            if (callback == null)
+            {
+                return;
+            }
+
+            if (Interlocked.Increment(ref queuedCallbackCount) > MaxQueuedCallbacks && !isCritical)
+            {
+                Interlocked.Decrement(ref queuedCallbackCount);
+                if (Interlocked.Exchange(ref callbackOverflowReported, 1) == 0 && RFrameworkLog.IsInitialized)
+                {
+                    RFrameworkLog.Warning(
+                        "Network channel '{0}' callback queue overflow. Non-critical callbacks are being dropped.", Name);
+                }
+
+                return;
+            }
+
+            callbackQueue.Enqueue(callback);
+        }
 
         /// <summary>
         /// 绑定 Helper 的收包回调。
@@ -402,7 +437,7 @@ namespace RFramework.Network
         {
             isConnected = false;
             StopHeartbeat();
-            eventModule?.Fire(new NetworkDisconnectedEvent(Name));
+            eventModule?.FireSafely(new NetworkDisconnectedEvent(Name));
 
             if (autoReconnect && !disposed && !isReconnecting)
             {

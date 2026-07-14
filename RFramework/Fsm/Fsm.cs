@@ -289,8 +289,18 @@ namespace RFramework.Fsm
                 return;
             }
 
-            currentStateTime += realElapseSeconds;
-            currentState.OnUpdate(elapseSeconds, realElapseSeconds);
+            try
+            {
+                currentStateTime += realElapseSeconds;
+                currentState.OnUpdate(elapseSeconds, realElapseSeconds);
+            }
+            catch
+            {
+                currentState = null;
+                currentStateTime = 0f;
+                isFaulted = true;
+                throw;
+            }
         }
 
         /// <inheritdoc/>

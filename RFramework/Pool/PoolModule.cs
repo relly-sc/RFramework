@@ -46,9 +46,24 @@ namespace RFramework.Pool
                 pools.Clear();
             }
 
+            List<Exception> errors = null;
             for (int i = 0; i < poolsToClear.Count; i++)
             {
-                poolsToClear[i].Clear();
+                try
+                {
+                    poolsToClear[i].Clear();
+                }
+                catch (Exception ex)
+                {
+                    (errors ??= new List<Exception>()).Add(ex);
+                }
+            }
+
+            if (errors != null)
+            {
+                throw new RFrameworkException(
+                    $"PoolModule shutdown encountered {errors.Count} pool error(s).",
+                    new AggregateException(errors));
             }
         }
 
@@ -168,9 +183,24 @@ namespace RFramework.Pool
                 poolsToRelease = new List<IObjectPoolBase>(pools.Values);
             }
 
+            List<Exception> errors = null;
             for (int i = 0; i < poolsToRelease.Count; i++)
             {
-                poolsToRelease[i].ReleaseUnused();
+                try
+                {
+                    poolsToRelease[i].ReleaseUnused();
+                }
+                catch (Exception ex)
+                {
+                    (errors ??= new List<Exception>()).Add(ex);
+                }
+            }
+
+            if (errors != null)
+            {
+                throw new RFrameworkException(
+                    $"PoolModule release encountered {errors.Count} pool error(s).",
+                    new AggregateException(errors));
             }
         }
     }

@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 
 namespace RFramework.Fsm
@@ -85,6 +86,8 @@ namespace RFramework.Fsm
         /// </summary>
         internal override void Update(float elapseSeconds, float realElapseSeconds)
         {
+            List<Exception> errors = null;
+
             // 先处理待添加
             if (toAdd.Count > 0)
             {
@@ -101,7 +104,14 @@ namespace RFramework.Fsm
             {
                 if (!toRemove.Contains(fsms[i]))
                 {
-                    fsms[i].Update(elapseSeconds, realElapseSeconds);
+                    try
+                    {
+                        fsms[i].Update(elapseSeconds, realElapseSeconds);
+                    }
+                    catch (Exception ex)
+                    {
+                        (errors ??= new List<Exception>()).Add(ex);
+                    }
                 }
             }
 
@@ -110,11 +120,28 @@ namespace RFramework.Fsm
             {
                 for (int i = 0; i < toRemove.Count; i++)
                 {
-                    toRemove[i].Shutdown();
-                    fsms.Remove(toRemove[i]);
+                    try
+                    {
+                        toRemove[i].Shutdown();
+                    }
+                    catch (Exception ex)
+                    {
+                        (errors ??= new List<Exception>()).Add(ex);
+                    }
+                    finally
+                    {
+                        fsms.Remove(toRemove[i]);
+                    }
                 }
 
                 toRemove.Clear();
+            }
+
+            if (errors != null)
+            {
+                throw new RFrameworkException(
+                    $"FsmModule update encountered {errors.Count} FSM error(s).",
+                    new AggregateException(errors));
             }
         }
 
@@ -132,12 +159,32 @@ namespace RFramework.Fsm
             toAdd.Clear();
             toRemove.Clear();
 
-            foreach (FsmBase fsm in allFsms)
+            List<Exception> errors = null;
+            try
             {
-                fsm.Shutdown();
+                foreach (FsmBase fsm in allFsms)
+                {
+                    try
+                    {
+                        fsm.Shutdown();
+                    }
+                    catch (Exception ex)
+                    {
+                        (errors ??= new List<Exception>()).Add(ex);
+                    }
+                }
+            }
+            finally
+            {
+                fsms.Clear();
             }
 
-            fsms.Clear();
+            if (errors != null)
+            {
+                throw new RFrameworkException(
+                    $"FsmModule shutdown encountered {errors.Count} FSM error(s).",
+                    new AggregateException(errors));
+            }
         }
     }
 }

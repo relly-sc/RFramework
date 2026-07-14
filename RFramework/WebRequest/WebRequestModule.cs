@@ -78,7 +78,7 @@ namespace RFramework.WebRequest
 
         /// <summary>
         /// 获取框架模块优先级。
-        /// 优先级 15：介于 Resource(20) 和 Timer(10) 之间。
+        /// 优先级 15：介于 Resource(50) 和 Timer(10) 之间。
         /// 确保通信层在资源系统初始化之后、定时器和事件系统之前就绪。
         /// </summary>
         internal override int Priority

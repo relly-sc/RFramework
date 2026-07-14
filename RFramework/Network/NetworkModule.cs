@@ -42,7 +42,7 @@ namespace RFramework.Network
         {
             get
             {
-                return 45;
+                return 0;
             }
         }
 

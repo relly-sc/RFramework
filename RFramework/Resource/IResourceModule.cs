@@ -61,7 +61,7 @@ namespace RFramework.Resource
         /// </summary>
         /// <param name="location">场景资源路径</param>
         /// <param name="sceneMode">场景加载模式：0=Single 替换当前场景，1=Additive 叠加到当前场景（与 UnityEngine.SceneManagement.LoadSceneMode 值一致）</param>
-        /// <param name="activateOnLoad">是否加载完成后立即激活</param>
+        /// <param name="activateOnLoad">是否加载完成后立即激活。当前内置 Helper 仅支持 true；传 false 会抛出 NotSupportedException，避免无激活入口的任务永久等待。</param>
         /// <param name="priority">加载优先级</param>
         /// <param name="onProgress">进度回调（0~1），可为 null</param>
         Task LoadSceneAsync(string location, int sceneMode = 0,
