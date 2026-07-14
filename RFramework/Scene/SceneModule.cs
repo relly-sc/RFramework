@@ -101,6 +101,11 @@ namespace RFramework.Scene
                 throw new RFrameworkException("Resource module is not set.");
             }
 
+            // Unity scene operations cannot be safely rolled back after they
+            // have started. Cancellation is therefore an admission check,
+            // performed before this module mutates its loading-state ledger.
+            ct.ThrowIfCancellationRequested();
+
             if (loadedSceneNames.Contains(assetName))
             {
                 throw new RFrameworkException($"Scene '{assetName}' is already loaded.");

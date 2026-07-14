@@ -79,6 +79,13 @@ namespace RFramework.Resource
         void UnloadAsset(object asset);
 
         /// <summary>
+        /// 按加载路径和泛型类型精确归还一次资源引用。
+        /// 当同一底层对象以多个路径或类型被加载时，应使用此重载，避免
+        /// <see cref="UnloadAsset(object)"/> 的对象引用查找产生歧义。
+        /// </summary>
+        void UnloadAsset<T>(string location) where T : class;
+
+        /// <summary>
         /// 立即释放所有引用计数为 0 的资源。
         /// </summary>
         void UnloadUnusedAssets();

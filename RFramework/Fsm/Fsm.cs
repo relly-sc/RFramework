@@ -81,6 +81,13 @@ namespace RFramework.Fsm
         private bool isTransitioning;
 
         /// <summary>
+        /// Whether a lifecycle callback failed. A synchronous FSM cannot safely
+        /// roll back arbitrary state side effects, so it stops after a failed
+        /// transition instead of continuing from an indeterminate state.
+        /// </summary>
+        private bool isFaulted;
+
+        /// <summary>
         /// 初始化有限状态机的新实例。
         /// </summary>
         /// <param name="owner">状态机拥有者。</param>
@@ -102,6 +109,7 @@ namespace RFramework.Fsm
             currentState = null;
             currentStateTime = 0f;
             isDestroyed = false;
+            isFaulted = false;
 
             for (int i = 0; i < states.Length; i++)
             {
@@ -165,6 +173,11 @@ namespace RFramework.Fsm
                 throw new RFrameworkException("Fsm is destroyed.");
             }
 
+            if (isFaulted)
+            {
+                throw new RFrameworkException("Fsm is faulted after a lifecycle exception and can not be restarted.");
+            }
+
             if (currentState != null)
             {
                 throw new RFrameworkException("Fsm is already started.");
@@ -184,6 +197,13 @@ namespace RFramework.Fsm
             {
                 state.OnEnter();
             }
+            catch
+            {
+                currentState = null;
+                currentStateTime = 0f;
+                isFaulted = true;
+                throw;
+            }
             finally
             {
                 isTransitioning = false;
@@ -196,6 +216,11 @@ namespace RFramework.Fsm
             if (isDestroyed)
             {
                 throw new RFrameworkException("Fsm is destroyed.");
+            }
+
+            if (isFaulted)
+            {
+                throw new RFrameworkException("Fsm is faulted after a lifecycle exception and can not change state.");
             }
 
             if (isTransitioning)
@@ -229,6 +254,13 @@ namespace RFramework.Fsm
                 currentStateTime = 0f;
                 targetState.OnEnter();
             }
+            catch
+            {
+                currentState = null;
+                currentStateTime = 0f;
+                isFaulted = true;
+                throw;
+            }
             finally
             {
                 isTransitioning = false;
@@ -252,7 +284,7 @@ namespace RFramework.Fsm
         /// <inheritdoc/>
         internal override void Update(float elapseSeconds, float realElapseSeconds)
         {
-            if (isDestroyed || currentState == null)
+            if (isDestroyed || isFaulted || currentState == null)
             {
                 return;
             }

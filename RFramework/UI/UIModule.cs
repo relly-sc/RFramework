@@ -47,6 +47,12 @@ namespace RFramework.UI
         /// </summary>
         private readonly Dictionary<string, IUIForm> uiForms = new Dictionary<string, IUIForm>();
 
+        // Keep the ResourceModule reference alongside the instantiated form. The form handle alone
+        // is insufficient to return the asset reference when the form is closed.
+        private readonly Dictionary<string, object> uiAssets = new Dictionary<string, object>();
+
+        private readonly HashSet<IUIForm> pausedUIForms = new HashSet<IUIForm>();
+
         /// <summary>
         /// 正在加载中的 UI 资源路径集合。
         /// </summary>
@@ -133,10 +139,13 @@ namespace RFramework.UI
             double startTimestamp = DateTime.UtcNow.Ticks;
             loadingUIForms.Add(assetName);
 
+            object uiAsset = null;
+            object uiInstance = null;
+            IUIForm uiForm = null;
             try
             {
                 // 通过 IResourceModule 加载 UI Prefab
-                object uiAsset = await resourceModule.LoadAssetAsync<object>(assetName, priority, ct);
+                uiAsset = await resourceModule.LoadAssetAsync<object>(assetName, priority, ct);
 
                 loadingUIForms.Remove(assetName);
 
@@ -144,17 +153,23 @@ namespace RFramework.UI
                 // 任一成立则放弃打开，并释放已加载但未使用的资源引用计数，避免泄漏。
                 if (ct.IsCancellationRequested || isShutdown || abortedUIForms.Remove(assetName))
                 {
-                    resourceModule.UnloadAsset(uiAsset);
+                    resourceModule.UnloadAsset<object>(assetName);
+                    uiAsset = null;
                     throw new OperationCanceledException();
                 }
 
                 // 实例化 UI 对象
-                object uiInstance = uiHelper.InstantiateUI(uiAsset);
-                IUIForm uiForm = uiHelper.CreateUIForm(uiInstance, assetName, windowLayer, fullScreen);
+                uiInstance = uiHelper.InstantiateUI(uiAsset);
+                uiForm = uiHelper.CreateUIForm(uiInstance, assetName, windowLayer, fullScreen);
+                if (uiForm == null)
+                {
+                    throw new RFrameworkException($"UI helper failed to create UI form '{assetName}'.");
+                }
 
                 // 生命周期：OnInit → OnOpen
                 uiForm.OnInit(userData);
                 uiForms.Add(assetName, uiForm);
+                uiAssets.Add(assetName, uiAsset);
 
                 // 按层级插入窗口栈
                 InsertToStack(uiForm);
@@ -175,6 +190,25 @@ namespace RFramework.UI
             }
             catch (Exception ex)
             {
+                if (uiForm != null)
+                {
+                    uiForms.Remove(assetName);
+                    windowStack.Remove(uiForm);
+                    pausedUIForms.Remove(uiForm);
+                }
+
+                uiAssets.Remove(assetName);
+
+                if (uiInstance != null)
+                {
+                    uiHelper?.ReleaseUI(uiInstance);
+                }
+
+                if (uiAsset != null)
+                {
+                    resourceModule?.UnloadAsset<object>(assetName);
+                }
+
                 loadingUIForms.Remove(assetName);
                 abortedUIForms.Remove(assetName);
 
@@ -215,6 +249,12 @@ namespace RFramework.UI
             // 获取实例对象归还对象池或销毁
             object uiInstance = uiForm.Handle;
             uiHelper.ReleaseUI(uiInstance);
+            pausedUIForms.Remove(uiForm);
+            if (uiAssets.TryGetValue(assetName, out object uiAsset))
+            {
+                uiAssets.Remove(assetName);
+                resourceModule.UnloadAsset<object>(assetName);
+            }
 
             // 恢复被覆盖窗口的可见性
             ApplyFullScreenVisibility();
@@ -236,10 +276,17 @@ namespace RFramework.UI
                 IUIForm uiForm = windowStack[i];
                 uiForm.OnClose(userData);
                 uiHelper.ReleaseUI(uiForm.Handle);
+                pausedUIForms.Remove(uiForm);
+            }
+
+            foreach (KeyValuePair<string, object> uiAsset in uiAssets)
+            {
+                resourceModule.UnloadAsset<object>(uiAsset.Key);
             }
 
             windowStack.Clear();
             uiForms.Clear();
+            uiAssets.Clear();
             loadingUIForms.Clear();
         }
 
@@ -345,14 +392,14 @@ namespace RFramework.UI
                 if (shouldPause)
                 {
                     // 被全屏窗口覆盖：暂停
-                    if (uiForm.IsOpened)
+                    if (uiForm.IsOpened && pausedUIForms.Add(uiForm))
                     {
                         uiForm.OnPause();
                     }
                 }
-                else
+                else if (pausedUIForms.Remove(uiForm))
                 {
-                    // 未被覆盖：恢复
+                    // Only resume forms that were actually paused by this module.
                     uiForm.OnResume();
                 }
             }
@@ -378,6 +425,8 @@ namespace RFramework.UI
             CloseAllUIForms();
             windowStack.Clear();
             uiForms.Clear();
+            uiAssets.Clear();
+            pausedUIForms.Clear();
             loadingUIForms.Clear();
             abortedUIForms.Clear();
         }

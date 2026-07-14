@@ -72,9 +72,27 @@ namespace RFramework.Event
                 }
             }
 
+            Exception firstError = null;
             for (int i = 0; i < toInvoke.Count; i++)
             {
-                toInvoke[i].Invoke();
+                try
+                {
+                    toInvoke[i].Invoke();
+                }
+                catch (Exception ex)
+                {
+                    // A bad asynchronous event must not prevent later queued
+                    // events from reaching the main thread this frame.
+                    if (firstError == null)
+                    {
+                        firstError = ex;
+                    }
+                }
+            }
+
+            if (firstError != null)
+            {
+                throw new RFrameworkException("EventModule: one or more asynchronous event handlers threw exception.", firstError);
             }
         }
 

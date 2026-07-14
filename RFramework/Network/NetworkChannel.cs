@@ -220,6 +220,12 @@ namespace RFramework.Network
                     {
                         isConnecting = false;
                         cancelReg.Dispose();
+                        if (disposed)
+                        {
+                            tcs.TrySetCanceled();
+                            return;
+                        }
+
                         tcs.TrySetException(new RFrameworkException(
                             string.Format("Failed to connect to {0}:{1} [{2}].", ip, port, Name)));
                         return;
@@ -265,6 +271,7 @@ namespace RFramework.Network
         /// <inheritdoc/>
         public void Disconnect()
         {
+            bool wasConnected = isConnected;
             disposed = true;
             StopHeartbeat();
             CancelReconnect();
@@ -277,6 +284,11 @@ namespace RFramework.Network
 
             isConnected = false;
             isConnecting = false;
+
+            if (wasConnected)
+            {
+                eventModule?.Fire(new NetworkDisconnectedEvent(Name));
+            }
         }
 
         /// <summary>
@@ -455,26 +467,30 @@ namespace RFramework.Network
 
             reconnectTimer = Timer.Timer.CreateOnce(
                 reconnectInterval,
-                async () =>
-                {
-                    if (disposed)
-                    {
-                        isReconnecting = false;
-                        return;
-                    }
-
-                    try
-                    {
-                        await ConnectAsync(CurrentIP, CurrentPort);
-                        isReconnecting = false;
-                    }
-                    catch
-                    {
-                        // 重连失败，再次尝试
-                        StartReconnect();
-                    }
-                });
+                () => { _ = ReconnectAsync(); });
             timerModule?.RegisterTimer(reconnectTimer);
+        }
+
+        private async Task ReconnectAsync()
+        {
+            if (disposed)
+            {
+                isReconnecting = false;
+                return;
+            }
+
+            try
+            {
+                await ConnectAsync(CurrentIP, CurrentPort);
+                isReconnecting = false;
+            }
+            catch
+            {
+                if (!disposed)
+                {
+                    StartReconnect();
+                }
+            }
         }
     }
 }

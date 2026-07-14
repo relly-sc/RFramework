@@ -32,6 +32,10 @@ namespace RFramework.Entity
         /// </summary>
         private readonly IEntityHelper entityHelper;
 
+        private readonly RFramework.Resource.IResourceModule resourceModule;
+
+        private bool released;
+
         /// <summary>
         /// 初始化实体实例对象。
         /// </summary>
@@ -39,12 +43,15 @@ namespace RFramework.Entity
         /// <param name="entityAsset">原始资源对象。</param>
         /// <param name="target">实例化后的对象。</param>
         /// <param name="entityHelper">实体辅助器。</param>
-        public EntityInstanceObject(string assetName, object entityAsset, object target, IEntityHelper entityHelper)
+        public EntityInstanceObject(string assetName, object entityAsset, object target, IEntityHelper entityHelper,
+            RFramework.Resource.IResourceModule resourceModule)
         {
             AssetName = assetName;
             EntityAsset = entityAsset;
             Target = target;
             this.entityHelper = entityHelper;
+            this.resourceModule = resourceModule;
+            released = false;
             LastUseTimestamp = System.DateTime.UtcNow.Ticks;
         }
 
@@ -65,10 +72,18 @@ namespace RFramework.Entity
         /// </summary>
         public void Release()
         {
+            if (released)
+            {
+                return;
+            }
+
+            released = true;
             if (entityHelper != null)
             {
                 entityHelper.ReleaseEntity(EntityAsset, Target);
             }
+
+            resourceModule?.UnloadAsset<object>(AssetName);
         }
     }
 }

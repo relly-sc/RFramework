@@ -257,21 +257,32 @@ namespace RFramework.Entity
             EntityInstanceObject instanceObject = group.SpawnEntityInstanceObject(assetName);
             if (instanceObject != null)
             {
-                // 对象池命中，直接显示
-                IEntity entity = InternalShowEntity(entityId, assetName, group, instanceObject.Target,
-                    false, 0f, userData);
-                activeInstanceObjects.Add(entityId, instanceObject);
-                return entity;
+                try
+                {
+                    // 对象池命中，直接显示
+                    IEntity entity = InternalShowEntity(entityId, assetName, group, instanceObject.Target,
+                        false, 0f, userData);
+                    activeInstanceObjects.Add(entityId, instanceObject);
+                    return entity;
+                }
+                catch
+                {
+                    CleanupFailedEntity(entityId, group);
+                    instanceObject.Release();
+                    throw;
+                }
             }
 
             // 对象池未命中，需要异步加载资源
             EntityLoadingInfo loadingInfo = new EntityLoadingInfo(entityId, assetName, group, userData);
             entitiesBeingLoaded.Add(entityId, loadingInfo);
 
+            object entityAsset = null;
+            instanceObject = null;
             try
             {
                 // 通过 IResourceModule 加载 Prefab 资源
-                object entityAsset = await resourceModule.LoadAssetAsync<object>(assetName, priority, ct);
+                entityAsset = await resourceModule.LoadAssetAsync<object>(assetName, priority, ct);
 
                 // 加载完成后检查取消 / 模块关闭 / 手动隐藏标记，
                 // 避免迟到的加载在已关闭（或正在关闭）的模块中复活实体
@@ -279,7 +290,8 @@ namespace RFramework.Entity
                 {
                     entitiesToReleaseOnLoad.Remove(entityId);
                     entitiesBeingLoaded.Remove(entityId);
-                    entityHelper.ReleaseEntity(entityAsset, null);
+                    resourceModule.UnloadAsset(entityAsset);
+                    entityAsset = null;
                     throw new OperationCanceledException(
                         $"Entity '{entityId}' loading was cancelled or module is shutting down.");
                 }
@@ -288,18 +300,29 @@ namespace RFramework.Entity
 
                 // 实例化并注册到对象池
                 object entityInstance = entityHelper.InstantiateEntity(entityAsset);
-                instanceObject = new EntityInstanceObject(assetName, entityAsset, entityInstance, entityHelper);
+                instanceObject = new EntityInstanceObject(assetName, entityAsset, entityInstance, entityHelper,
+                    resourceModule);
                 group.RegisterEntityInstanceObject(instanceObject, true);
 
                 // 内部显示流程
                 IEntity entity = InternalShowEntity(entityId, assetName, group, entityInstance,
                     true, (float)loadingInfo.ElapsedSeconds, userData);
                 activeInstanceObjects.Add(entityId, instanceObject);
+                instanceObject = null; // Ownership transfers to activeInstanceObjects.
                 return entity;
             }
             catch (Exception ex)
             {
                 entitiesBeingLoaded.Remove(entityId);
+                CleanupFailedEntity(entityId, group);
+                if (instanceObject != null)
+                {
+                    instanceObject.Release();
+                }
+                else if (entityAsset != null)
+                {
+                    resourceModule.UnloadAsset(entityAsset);
+                }
 
                 // 分发失败事件
                 if (eventModule != null)
@@ -737,6 +760,11 @@ namespace RFramework.Entity
                 entityInfo.Status = EntityStatus.WillRecycle;
                 entityInfo.Entity.OnRecycle();
                 entityInfo.Status = EntityStatus.Recycled;
+                if (activeInstanceObjects.TryGetValue(entityInfo.Entity.Id, out EntityInstanceObject instanceObject))
+                {
+                    activeInstanceObjects.Remove(entityInfo.Entity.Id);
+                    instanceObject.Release();
+                }
             }
 
             // 销毁所有实体组
@@ -783,6 +811,24 @@ namespace RFramework.Entity
             }
 
             throw new RFrameworkException($"Entity group '{groupName}' is not exist.");
+        }
+
+        private void CleanupFailedEntity(long entityId, EntityGroup group)
+        {
+            if (!entityInfos.TryGetValue(entityId, out EntityInfo entityInfo))
+            {
+                return;
+            }
+
+            entityInfos.Remove(entityId);
+            try
+            {
+                group.RemoveEntity(entityInfo.Entity);
+            }
+            catch
+            {
+                // Preserve the original creation exception.
+            }
         }
     }
 }

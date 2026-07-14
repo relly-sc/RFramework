@@ -146,6 +146,11 @@ namespace RFramework.Resource
         /// <param name="helper">资源辅助器实例，由 Runtime 层创建并注入。</param>
         public void SetHelper(IResourceHelper helper)
         {
+            if (isInitialized)
+            {
+                throw new InvalidOperationException("ResourceModule: Cannot change helper after initialization.");
+            }
+
             this.helper = helper ?? throw new RFrameworkException("Resource helper is invalid.");
         }
 
@@ -248,8 +253,6 @@ namespace RFramework.Resource
             // 单锁原子决策：缓存命中 / 加入等待列表 / 登记为首个加载者，三者互斥，
             // 避免双首调用竞态导致 pendingLoads 被覆盖。
             TaskCompletionSource<CachedAsset> waitTcs = null;
-            List<TaskCompletionSource<CachedAsset>> newTcsList = null;
-
             lock (loadLock)
             {
                 if (loadedAssets.TryGetValue(key, out CachedAsset cached))
@@ -260,13 +263,13 @@ namespace RFramework.Resource
 
                 if (pendingLoads.TryGetValue(key, out List<TaskCompletionSource<CachedAsset>> tcsList))
                 {
-                    waitTcs = new TaskCompletionSource<CachedAsset>();
+                    waitTcs = new TaskCompletionSource<CachedAsset>(
+                        TaskCreationOptions.RunContinuationsAsynchronously);
                     tcsList.Add(waitTcs);
                 }
                 else
                 {
-                    newTcsList = new List<TaskCompletionSource<CachedAsset>>();
-                    pendingLoads[key] = newTcsList;
+                    pendingLoads[key] = new List<TaskCompletionSource<CachedAsset>>();
                 }
             }
 
@@ -317,7 +320,7 @@ namespace RFramework.Resource
                 {
                     if (asset != null)
                     {
-                        helper?.ReleaseAsset(location);
+                        helper?.ReleaseAsset(location, assetType);
                     }
 
                     throw new OperationCanceledException();
@@ -325,6 +328,14 @@ namespace RFramework.Resource
 
                 if (asset != null)
                 {
+                    if (!(asset is T))
+                    {
+                        helper?.ReleaseAsset(location, assetType);
+                        throw new RFrameworkException(
+                            $"LoadAssetAsync<{assetType.Name}> returned incompatible asset type " +
+                            $"'{asset.GetType().Name}' for: {location}");
+                    }
+
                     CachedAsset newCached = new CachedAsset
                     {
                         Location = location,
@@ -333,58 +344,30 @@ namespace RFramework.Resource
                         RefCount = 1 // 初始引用计数为 1（当前调用者）
                     };
 
-                    lock (loadLock)
-                    {
-                        loadedAssets[key] = newCached;
-
-                        // 通知所有等待者（同一 location+type 的并发请求）
-                        foreach (TaskCompletionSource<CachedAsset> tcs in newTcsList)
-                        {
-                            tcs.TrySetResult(newCached);
-                        }
-                    }
+                    List<TaskCompletionSource<CachedAsset>> waiters = StoreLoadedAssetAndDetachWaiters(key, newCached);
+                    CompleteWaiters(waiters, newCached, null, false);
 
                     return newCached.Asset as T;
                 }
 
-                // 加载返回 null：视为失败，分发事件并通知等待者（保留真实错误）
-                FireLoadFailedEvent<T>(location,
+                // 加载返回 null：视为失败，catch 会统一分发失败事件并通知等待者。
+                RFrameworkException loadException = new RFrameworkException(
                     $"LoadAssetAsync<{assetType.Name}> failed: {location}");
-                lock (loadLock)
-                {
-                    foreach (TaskCompletionSource<CachedAsset> tcs in newTcsList)
-                    {
-                        tcs.TrySetException(new RFrameworkException(
-                            $"LoadAssetAsync<{assetType.Name}> failed: {location}"));
-                    }
-                }
-
-                throw new RFrameworkException($"LoadAssetAsync<{assetType.Name}> failed: {location}");
+                CompleteWaiters(DetachPendingLoads(key), null, loadException, false);
+                throw loadException;
             }
             catch (Exception ex)
             {
                 if (ex is OperationCanceledException)
                 {
                     // 取消：仅将等待者一并取消，不视为加载失败，不派发失败事件
-                    lock (loadLock)
-                    {
-                        foreach (TaskCompletionSource<CachedAsset> tcs in newTcsList)
-                        {
-                            tcs.TrySetCanceled();
-                        }
-                    }
+                    CompleteWaiters(DetachPendingLoads(key), null, null, true);
                 }
                 else
                 {
-                    // 真实错误：保留真实异常（不吞），等待者收到同样的异常而非“已取消”
+                    // 先完成等待者，再分发外部事件。事件订阅者异常不应使并发调用方永久等待。
+                    CompleteWaiters(DetachPendingLoads(key), null, ex, false);
                     FireLoadFailedEvent<T>(location, ex.Message);
-                    lock (loadLock)
-                    {
-                        foreach (TaskCompletionSource<CachedAsset> tcs in newTcsList)
-                        {
-                            tcs.TrySetException(ex);
-                        }
-                    }
                 }
 
                 throw;
@@ -392,10 +375,6 @@ namespace RFramework.Resource
             finally
             {
                 linkedCts?.Dispose();
-                lock (loadLock)
-                {
-                    pendingLoads.Remove(key);
-                }
             }
         }
 
@@ -426,6 +405,12 @@ namespace RFramework.Resource
                     cached.RefCount++;
                     return cached.Asset as T;
                 }
+
+                if (pendingLoads.ContainsKey(key))
+                {
+                    throw new RFrameworkException(
+                        "LoadAssetSync can not run while the same asset is loading asynchronously. Await LoadAssetAsync instead.");
+                }
             }
 
             object asset = helper.LoadAssetSync(location, typeof(T));
@@ -435,6 +420,16 @@ namespace RFramework.Resource
                 FireLoadFailedEvent<T>(location, $"LoadAssetSync<{typeof(T).Name}> failed: {location}");
                 throw new RFrameworkException(
                     $"LoadAssetSync<{typeof(T).Name}> failed: {location}");
+            }
+
+            if (!(asset is T))
+            {
+                helper.ReleaseAsset(location, typeof(T));
+                FireLoadFailedEvent<T>(location,
+                    $"LoadAssetSync<{typeof(T).Name}> returned incompatible asset type: {location}");
+                throw new RFrameworkException(
+                    $"LoadAssetSync<{typeof(T).Name}> returned incompatible asset type " +
+                    $"'{asset.GetType().Name}' for: {location}");
             }
 
             CachedAsset newCached = new CachedAsset
@@ -476,6 +471,10 @@ namespace RFramework.Resource
             try
             {
                 await helper.LoadSceneAsync(location, sceneMode, activateOnLoad, priority, onProgress);
+                if (sceneMode == 0)
+                {
+                    loadedScenes.Clear();
+                }
                 loadedScenes.Add(location);
             }
             catch (Exception ex)
@@ -512,20 +511,50 @@ namespace RFramework.Resource
             }
 
             // 查找对应的 CachedAsset
-            foreach (KeyValuePair<AssetCacheKey, CachedAsset> kv in loadedAssets)
+            lock (loadLock)
             {
-                if (kv.Value.Asset == asset)
+                AssetCacheKey matchedKey = default;
+                CachedAsset matchedAsset = null;
+                foreach (KeyValuePair<AssetCacheKey, CachedAsset> kv in loadedAssets)
                 {
-                    kv.Value.RefCount--;
-
-                    if (kv.Value.RefCount <= 0)
+                    if (kv.Value.Asset == asset)
                     {
-                        releaseQueue.Enqueue(kv.Value);
-                        loadedAssets.Remove(kv.Key);
-                    }
+                        if (matchedAsset != null)
+                        {
+                            throw new RFrameworkException(
+                                "UnloadAsset(object) is ambiguous for this asset. Use UnloadAsset<T>(location).");
+                        }
 
-                    return;
+                        matchedKey = kv.Key;
+                        matchedAsset = kv.Value;
+                    }
                 }
+
+                if (matchedAsset != null)
+                {
+                    ReleaseReferenceUnsafe(matchedKey, matchedAsset);
+                }
+            }
+        }
+
+        /// <inheritdoc/>
+        public void UnloadAsset<T>(string location) where T : class
+        {
+            if (string.IsNullOrEmpty(location))
+            {
+                throw new ArgumentNullException(nameof(location));
+            }
+
+            AssetCacheKey key = new AssetCacheKey(NormalizeLocation(location), typeof(T));
+            lock (loadLock)
+            {
+                if (!loadedAssets.TryGetValue(key, out CachedAsset asset))
+                {
+                    throw new RFrameworkException(
+                        Utility.Text.Format("Resource '{0}' with type '{1}' is not loaded.", location, typeof(T).FullName));
+                }
+
+                ReleaseReferenceUnsafe(key, asset);
             }
         }
 
@@ -537,28 +566,38 @@ namespace RFramework.Resource
         {
             // 收集所有引用计数为 0 的资源
             List<CachedAsset> toRelease = new List<CachedAsset>();
-            foreach (KeyValuePair<AssetCacheKey, CachedAsset> kv in loadedAssets)
+            lock (loadLock)
             {
-                if (kv.Value.CanRelease)
+                foreach (KeyValuePair<AssetCacheKey, CachedAsset> kv in loadedAssets)
                 {
-                    toRelease.Add(kv.Value);
+                    if (kv.Value.CanRelease)
+                    {
+                        toRelease.Add(kv.Value);
+                    }
                 }
-            }
 
-            foreach (CachedAsset asset in toRelease)
-            {
-                loadedAssets.Remove(new AssetCacheKey(NormalizeLocation(asset.Location), asset.AssetType));
-                ReleaseCachedAsset(asset);
+                foreach (CachedAsset asset in toRelease)
+                {
+                    loadedAssets.Remove(new AssetCacheKey(NormalizeLocation(asset.Location), asset.AssetType));
+                }
             }
 
             // 同时处理待回收队列
-            while (releaseQueue.Count > 0)
+            lock (loadLock)
             {
-                CachedAsset asset = releaseQueue.Dequeue();
-                if (asset.CanRelease)
+                while (releaseQueue.Count > 0)
                 {
-                    ReleaseCachedAsset(asset);
+                    CachedAsset asset = releaseQueue.Dequeue();
+                    if (asset.CanRelease)
+                    {
+                        toRelease.Add(asset);
+                    }
                 }
+            }
+
+            for (int i = 0; i < toRelease.Count; i++)
+            {
+                ReleaseCachedAsset(toRelease[i]);
             }
         }
 
@@ -604,7 +643,13 @@ namespace RFramework.Resource
         /// </summary>
         public int LoadedAssetCount
         {
-            get { return loadedAssets.Count; }
+            get
+            {
+                lock (loadLock)
+                {
+                    return loadedAssets.Count;
+                }
+            }
         }
 
         /// <summary>
@@ -612,7 +657,13 @@ namespace RFramework.Resource
         /// </summary>
         public int LoadingAssetCount
         {
-            get { return pendingLoads.Count; }
+            get
+            {
+                lock (loadLock)
+                {
+                    return pendingLoads.Count;
+                }
+            }
         }
 
         // ==================== RFrameworkModule 生命周期 ====================
@@ -626,16 +677,25 @@ namespace RFramework.Resource
         internal override void Update(float elapseSeconds, float realElapseSeconds)
         {
             // 处理待回收队列——每帧最多释放 5 个，避免尖峰
-            int maxReleasePerFrame = 5;
-            while (releaseQueue.Count > 0 && maxReleasePerFrame > 0)
+            List<CachedAsset> toRelease = new List<CachedAsset>(5);
+            lock (loadLock)
             {
-                CachedAsset asset = releaseQueue.Dequeue();
-                if (asset.CanRelease)
+                int maxReleasePerFrame = 5;
+                while (releaseQueue.Count > 0 && maxReleasePerFrame > 0)
                 {
-                    ReleaseCachedAsset(asset);
-                }
+                    CachedAsset asset = releaseQueue.Dequeue();
+                    if (asset.CanRelease)
+                    {
+                        toRelease.Add(asset);
+                    }
 
-                maxReleasePerFrame--;
+                    maxReleasePerFrame--;
+                }
+            }
+
+            foreach (CachedAsset asset in toRelease)
+            {
+                ReleaseCachedAsset(asset);
             }
         }
 
@@ -650,14 +710,20 @@ namespace RFramework.Resource
             moduleCts.Cancel();
 
             // 释放所有缓存的资源句柄
-            foreach (KeyValuePair<AssetCacheKey, CachedAsset> kv in loadedAssets)
+            List<CachedAsset> assetsToRelease;
+            lock (loadLock)
             {
-                helper?.ReleaseAsset(kv.Key.Location);
+                assetsToRelease = new List<CachedAsset>(loadedAssets.Values);
+                loadedAssets.Clear();
+                pendingLoads.Clear();
+                releaseQueue.Clear();
             }
 
-            loadedAssets.Clear();
-            pendingLoads.Clear();
-            releaseQueue.Clear();
+            foreach (CachedAsset asset in assetsToRelease)
+            {
+                ReleaseCachedAsset(asset);
+            }
+
             loadedScenes.Clear();
 
             // 销毁底层资源系统（释放所有场景句柄、移除资源包裹并销毁辅助器）。
@@ -714,6 +780,16 @@ namespace RFramework.Resource
             return location;
         }
 
+        private void ReleaseReferenceUnsafe(AssetCacheKey key, CachedAsset asset)
+        {
+            asset.RefCount--;
+            if (asset.RefCount <= 0)
+            {
+                loadedAssets.Remove(key);
+                releaseQueue.Enqueue(asset);
+            }
+        }
+
         /// <summary>
         /// 释放缓存的资源对象，通知辅助器释放底层资源并清空引用。
         /// </summary>
@@ -725,10 +801,73 @@ namespace RFramework.Resource
                 return;
             }
 
-            loadedAssets.Remove(new AssetCacheKey(NormalizeLocation(asset.Location), asset.AssetType));
-            helper?.ReleaseAsset(asset.Location);
+            helper?.ReleaseAsset(asset.Location, asset.AssetType);
 
             asset.Asset = null;
+        }
+
+        /// <summary>
+        /// 原子写入缓存并摘除等待者。后续请求只能看到已缓存结果或新的加载批次，
+        /// 不会加入一个即将完成但未收到通知的旧等待列表。
+        /// </summary>
+        private List<TaskCompletionSource<CachedAsset>> StoreLoadedAssetAndDetachWaiters(
+            AssetCacheKey key, CachedAsset asset)
+        {
+            lock (loadLock)
+            {
+                loadedAssets[key] = asset;
+                return DetachPendingLoadsUnsafe(key);
+            }
+        }
+
+        /// <summary>
+        /// 从并发加载表中摘除指定资源的全部等待者。
+        /// </summary>
+        private List<TaskCompletionSource<CachedAsset>> DetachPendingLoads(AssetCacheKey key)
+        {
+            lock (loadLock)
+            {
+                return DetachPendingLoadsUnsafe(key);
+            }
+        }
+
+        private List<TaskCompletionSource<CachedAsset>> DetachPendingLoadsUnsafe(AssetCacheKey key)
+        {
+            if (!pendingLoads.TryGetValue(key, out List<TaskCompletionSource<CachedAsset>> waiters))
+            {
+                return null;
+            }
+
+            pendingLoads.Remove(key);
+            return waiters;
+        }
+
+        /// <summary>
+        /// 在锁外完成等待者，避免用户 continuation 重入资源模块时占用 loadLock。
+        /// </summary>
+        private static void CompleteWaiters(List<TaskCompletionSource<CachedAsset>> waiters,
+            CachedAsset result, Exception exception, bool canceled)
+        {
+            if (waiters == null)
+            {
+                return;
+            }
+
+            foreach (TaskCompletionSource<CachedAsset> waiter in waiters)
+            {
+                if (canceled)
+                {
+                    waiter.TrySetCanceled();
+                }
+                else if (exception != null)
+                {
+                    waiter.TrySetException(exception);
+                }
+                else
+                {
+                    waiter.TrySetResult(result);
+                }
+            }
         }
 
         /// <summary>

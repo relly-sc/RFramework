@@ -51,7 +51,8 @@ namespace RFramework.Resource
         /// 调用后该位置的资源不再被底层持有，但已返回给调用方的对象引用仍然有效。
         /// </summary>
         /// <param name="location">资源路径</param>
-        void ReleaseAsset(string location);
+        /// <param name="assetType">加载该资源时使用的资源类型</param>
+        void ReleaseAsset(string location, Type assetType);
 
         /// <summary>
         /// 异步加载场景。

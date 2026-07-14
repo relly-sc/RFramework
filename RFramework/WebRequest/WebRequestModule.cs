@@ -12,7 +12,7 @@ namespace RFramework.WebRequest
     /// </summary>
     /// <remarks>
     /// 架构要点：
-    /// - SemaphoreSlim 控制并发上限，超出的请求排队等待。
+    /// - 优先级调度器控制并发上限，超出的请求按优先级等待。
     /// - 每个请求通过 Linked CancellationTokenSource 实现超时+用户取消的双重控制。
     /// - 重试策略：连接超时、请求超时、网络错误、5xx 错误自动重试；4xx 和用户取消不重试。
     /// - Tag 机制：CancelAllByTag 遍历活跃+排队中的请求，匹配 Tag 则触发 CTS 取消。
@@ -29,16 +29,10 @@ namespace RFramework.WebRequest
         private IWebRequestHelper helper;
 
         /// <summary>
-        /// 并发信号量，控制同时进行中的请求数。
-        /// 超过上限的请求在队列中等待，直到有请求完成释放槽位。
+        /// 并发优先级调度器，控制同时进行中的请求数。
+        /// 超过上限的请求按优先级等待，同优先级保持 FIFO。
         /// </summary>
-        private SemaphoreSlim semaphore;
-
-        /// <summary>
-        /// 已退役的信号量集合。SetMaxConcurrentRequests 重建时旧实例不立即 Dispose
-        /// （避免释放仍在被在途请求使用的实例），延后至 Shutdown 统一释放。
-        /// </summary>
-        private readonly List<SemaphoreSlim> retiredSemaphores = new List<SemaphoreSlim>();
+        private readonly PriorityRequestScheduler scheduler;
 
         /// <summary>
         /// 最大并发请求数缓存（用于 SetMaxConcurrentRequests 时重建信号量）。
@@ -78,7 +72,7 @@ namespace RFramework.WebRequest
             maxConcurrentRequests = 5;
             defaultTimeoutMs = 30000;
             maxRetries = 0;
-            semaphore = new SemaphoreSlim(maxConcurrentRequests, maxConcurrentRequests);
+            scheduler = new PriorityRequestScheduler(maxConcurrentRequests);
             trackedRequests = new List<TrackedRequest>();
         }
 
@@ -115,16 +109,7 @@ namespace RFramework.WebRequest
 
             maxConcurrentRequests = max;
 
-            // max <= 0 表示无限制：不创建信号量，SendCore 跳过 Wait/Release（避免 SemaphoreSlim(0,0) 死锁）
-            SemaphoreSlim old = semaphore;
-            semaphore = max <= 0 ? null : new SemaphoreSlim(max, max);
-
-            // 不在调用中途 Dispose 旧信号量：若有在途请求正等待旧实例，
-            // Dispose 会使其 Release 抛 ObjectDisposedException。旧实例延后至 Shutdown 统一释放。
-            if (old != null)
-            {
-                retiredSemaphores.Add(old);
-            }
+            scheduler.SetMaximum(max);
         }
 
         /// <inheritdoc/>
@@ -486,7 +471,7 @@ namespace RFramework.WebRequest
             CancellationTokenSource timeoutCts = null;
             TrackedRequest tracked = null;
             bool acquiredSlot = false;
-            SemaphoreSlim sem = null;
+            PriorityRequestScheduler requestScheduler = null;
 
             try
             {
@@ -513,15 +498,11 @@ namespace RFramework.WebRequest
                         userCt, mainCts.Token);
                 }
 
-                // 4. 等待并发槽位（无限制模式下 semaphore 为 null，直接放行）
-                // 捕获本地引用，保证 Wait 与 Release 作用于同一实例（避免运行时替换 semaphore 导致释放到错误实例）
+                // 4. 等待并发槽位。PriorityRequestScheduler 按优先级、同级 FIFO 调度。
+                requestScheduler = scheduler;
+                await requestScheduler.WaitAsync(request.Priority, linkedCts.Token);
+                acquiredSlot = true;
                 tracked.SetActive(true);
-                sem = semaphore;
-                if (sem != null)
-                {
-                    await sem.WaitAsync(linkedCts.Token);
-                    acquiredSlot = true;
-                }
 
                 // 5. 带重试的请求循环
                 WebResponse lastResponse = null;
@@ -589,20 +570,9 @@ namespace RFramework.WebRequest
                 }
 
                 // 仅当成功获取槽位时才释放，避免释放未持有的槽位污染计数
-                if (acquiredSlot && sem != null)
+                if (acquiredSlot && requestScheduler != null)
                 {
-                    try
-                    {
-                        sem.Release();
-                    }
-                    catch (ObjectDisposedException)
-                    {
-                        // Semaphore 已释放
-                    }
-                    catch (SemaphoreFullException)
-                    {
-                        // 已释放过
-                    }
+                    requestScheduler.Release();
                 }
 
                 // 释放主 CTS（与槽位释放解耦，无论是否获取槽位都需清理）
@@ -816,37 +786,14 @@ namespace RFramework.WebRequest
                 trackedRequests.Clear();
             }
 
-            try
-            {
-                semaphore?.Dispose();
-            }
-            catch
-            {
-                // 忽略
-            }
-
-            // 释放所有已退役（被 SetMaxConcurrentRequests 替换的）旧信号量
-            for (int i = 0; i < retiredSemaphores.Count; i++)
-            {
-                try
-                {
-                    retiredSemaphores[i].Dispose();
-                }
-                catch
-                {
-                    // 忽略
-                }
-            }
-
-            retiredSemaphores.Clear();
-            semaphore = null;
+            scheduler.Dispose();
             helper = null;
         }
 
         // ====== 下载核心 ======
 
         /// <summary>
-        /// 流式下载核心：受 SemaphoreSlim 并发控制，直接写入磁盘。
+        /// 流式下载核心：受优先级调度器并发控制，直接写入磁盘。
         /// 不支持重试（大文件重试浪费流量）。
         /// </summary>
         private async Task SendCoreDownloadAsync(
@@ -865,7 +812,7 @@ namespace RFramework.WebRequest
             CancellationTokenSource timeoutCts = null;
             TrackedRequest tracked = null;
             bool acquiredSlot = false;
-            SemaphoreSlim sem = null;
+            PriorityRequestScheduler requestScheduler = null;
 
             try
             {
@@ -889,14 +836,10 @@ namespace RFramework.WebRequest
                         userCt, mainCts.Token);
                 }
 
-                // 捕获本地引用，保证 Wait 与 Release 作用于同一实例（避免运行时替换 semaphore 导致释放到错误实例）
+                requestScheduler = scheduler;
+                await requestScheduler.WaitAsync(request.Priority, linkedCts.Token);
+                acquiredSlot = true;
                 tracked.SetActive(true);
-                sem = semaphore;
-                if (sem != null)
-                {
-                    await sem.WaitAsync(linkedCts.Token);
-                    acquiredSlot = true;
-                }
 
                 await helper.DownloadFileAsync(request, savePath, progress, linkedCts.Token);
             }
@@ -917,9 +860,9 @@ namespace RFramework.WebRequest
             }
             finally
             {
-                if (acquiredSlot && sem != null)
+                if (acquiredSlot && requestScheduler != null)
                 {
-                    try { sem.Release(); } catch { }
+                    requestScheduler.Release();
                 }
                 mainCts?.Dispose();
                 linkedCts?.Dispose();
@@ -935,7 +878,189 @@ namespace RFramework.WebRequest
             }
         }
 
-        // ====== 内部追踪结构 ======
+        // ====== 内部调度与追踪结构 ======
+
+        private sealed class PriorityRequestScheduler : IDisposable
+        {
+            private readonly object syncRoot = new object();
+            private readonly List<Waiter> waiters = new List<Waiter>();
+            private int maximum;
+            private int activeCount;
+            private long sequence;
+            private bool disposed;
+
+            public PriorityRequestScheduler(int maximum)
+            {
+                this.maximum = maximum;
+            }
+
+            public Task WaitAsync(uint priority, CancellationToken ct)
+            {
+                ct.ThrowIfCancellationRequested();
+                lock (syncRoot)
+                {
+                    ThrowIfDisposed();
+                    if (maximum <= 0 || activeCount < maximum)
+                    {
+                        activeCount++;
+                        return Task.CompletedTask;
+                    }
+
+                    Waiter waiter = new Waiter(priority, sequence++);
+                    waiters.Add(waiter);
+                    waiter.Registration = ct.Register(() => Cancel(waiter));
+                    if (waiter.Completion.Task.IsCanceled)
+                    {
+                        waiter.Registration.Dispose();
+                    }
+
+                    return waiter.Completion.Task;
+                }
+            }
+
+            public void Release()
+            {
+                Waiter next = null;
+                lock (syncRoot)
+                {
+                    if (activeCount <= 0)
+                    {
+                        throw new RFrameworkException("WebRequest scheduler released a slot that was not acquired.");
+                    }
+
+                    activeCount--;
+                    next = TakeNextUnsafe();
+                    if (next != null)
+                    {
+                        activeCount++;
+                    }
+                }
+
+                Complete(next);
+            }
+
+            public void SetMaximum(int value)
+            {
+                List<Waiter> ready = new List<Waiter>();
+                lock (syncRoot)
+                {
+                    ThrowIfDisposed();
+                    maximum = value;
+                    while (maximum <= 0 || activeCount < maximum)
+                    {
+                        Waiter next = TakeNextUnsafe();
+                        if (next == null)
+                        {
+                            break;
+                        }
+
+                        activeCount++;
+                        ready.Add(next);
+                    }
+                }
+
+                for (int i = 0; i < ready.Count; i++)
+                {
+                    Complete(ready[i]);
+                }
+            }
+
+            public void Dispose()
+            {
+                List<Waiter> cancelled;
+                lock (syncRoot)
+                {
+                    if (disposed)
+                    {
+                        return;
+                    }
+
+                    disposed = true;
+                    cancelled = new List<Waiter>(waiters);
+                    waiters.Clear();
+                }
+
+                for (int i = 0; i < cancelled.Count; i++)
+                {
+                    cancelled[i].Registration.Dispose();
+                    cancelled[i].Completion.TrySetException(
+                        new ObjectDisposedException(nameof(PriorityRequestScheduler)));
+                }
+            }
+
+            private void Cancel(Waiter waiter)
+            {
+                bool removed;
+                lock (syncRoot)
+                {
+                    removed = waiters.Remove(waiter);
+                }
+
+                if (removed)
+                {
+                    waiter.Completion.TrySetCanceled();
+                    waiter.Registration.Dispose();
+                }
+            }
+
+            private Waiter TakeNextUnsafe()
+            {
+                if (waiters.Count == 0)
+                {
+                    return null;
+                }
+
+                int selectedIndex = 0;
+                for (int i = 1; i < waiters.Count; i++)
+                {
+                    Waiter candidate = waiters[i];
+                    Waiter selected = waiters[selectedIndex];
+                    if (candidate.Priority > selected.Priority ||
+                        (candidate.Priority == selected.Priority && candidate.Sequence < selected.Sequence))
+                    {
+                        selectedIndex = i;
+                    }
+                }
+
+                Waiter next = waiters[selectedIndex];
+                waiters.RemoveAt(selectedIndex);
+                return next;
+            }
+
+            private static void Complete(Waiter waiter)
+            {
+                if (waiter == null)
+                {
+                    return;
+                }
+
+                waiter.Registration.Dispose();
+                waiter.Completion.TrySetResult(true);
+            }
+
+            private void ThrowIfDisposed()
+            {
+                if (disposed)
+                {
+                    throw new ObjectDisposedException(nameof(PriorityRequestScheduler));
+                }
+            }
+
+            private sealed class Waiter
+            {
+                public readonly uint Priority;
+                public readonly long Sequence;
+                public readonly TaskCompletionSource<bool> Completion =
+                    new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+                public CancellationTokenRegistration Registration;
+
+                public Waiter(uint priority, long sequence)
+                {
+                    Priority = priority;
+                    Sequence = sequence;
+                }
+            }
+        }
 
         /// <summary>
         /// 内部请求追踪项，用于 Tag 分组取消和活跃状态统计。
