@@ -10,6 +10,8 @@ namespace RFramework
         /// </summary>
         public static class Random
         {
+            private static readonly object s_SyncRoot = new object();
+
             /// <summary>
             /// 随机数生成器实例。
             /// </summary>
@@ -21,7 +23,10 @@ namespace RFramework
             /// <param name="seed">随机数种子。</param>
             public static void SetSeed(int seed)
             {
-                s_Random = new System.Random(seed);
+                lock (s_SyncRoot)
+                {
+                    s_Random = new System.Random(seed);
+                }
             }
 
             /// <summary>
@@ -30,28 +35,43 @@ namespace RFramework
             /// <returns>大于等于零且小于 System.Int32.MaxValue 的 32 位带符号整数。</returns>
             public static int GetRandom()
             {
-                return s_Random.Next();
+                lock (s_SyncRoot)
+                {
+                    return s_Random.Next();
+                }
             }
 
             /// <summary>
             /// 返回一个小于所指定最大值的非负随机数。
             /// </summary>
             /// <param name="maxValue">要生成的随机数的上界（随机数不能取该上界值）。maxValue 必须大于等于零。</param>
-            /// <returns>大于等于零且小于 maxValue 的 32 位带符号整数，即：返回值的范围通常包括零但不包括 maxValue。不过，如果 maxValue 等于零，则返回 maxValue。</returns>
+            /// <returns>
+            /// 大于等于零且小于 maxValue 的整数；maxValue 为零时返回零。
+            /// </returns>
             public static int GetRandom(int maxValue)
             {
-                return s_Random.Next(maxValue);
+                lock (s_SyncRoot)
+                {
+                    return s_Random.Next(maxValue);
+                }
             }
 
             /// <summary>
             /// 返回一个指定范围内的随机数。
             /// </summary>
             /// <param name="minValue">返回的随机数的下界（随机数可取该下界值）。</param>
-            /// <param name="maxValue">返回的随机数的上界（随机数不能取该上界值）。maxValue 必须大于等于 minValue。</param>
-            /// <returns>一个大于等于 minValue 且小于 maxValue 的 32 位带符号整数，即：返回的值范围包括 minValue 但不包括 maxValue。如果 minValue 等于 maxValue，则返回 minValue。</returns>
+            /// <param name="maxValue">
+            /// 返回的随机数上界（不包含），必须大于等于 minValue。
+            /// </param>
+            /// <returns>
+            /// 大于等于 minValue 且小于 maxValue 的整数；二者相等时返回 minValue。
+            /// </returns>
             public static int GetRandom(int minValue, int maxValue)
             {
-                return s_Random.Next(minValue, maxValue);
+                lock (s_SyncRoot)
+                {
+                    return s_Random.Next(minValue, maxValue);
+                }
             }
 
             /// <summary>
@@ -60,7 +80,10 @@ namespace RFramework
             /// <returns>大于等于 0.0 并且小于 1.0 的双精度浮点数。</returns>
             public static double GetRandomDouble()
             {
-                return s_Random.NextDouble();
+                lock (s_SyncRoot)
+                {
+                    return s_Random.NextDouble();
+                }
             }
 
             /// <summary>
@@ -69,7 +92,15 @@ namespace RFramework
             /// <param name="buffer">包含随机数的字节数组。</param>
             public static void GetRandomBytes(byte[] buffer)
             {
-                s_Random.NextBytes(buffer);
+                if (buffer == null)
+                {
+                    throw new RFrameworkException("Buffer is invalid.");
+                }
+
+                lock (s_SyncRoot)
+                {
+                    s_Random.NextBytes(buffer);
+                }
             }
         }
     }

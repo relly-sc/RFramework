@@ -6,7 +6,7 @@ namespace RFramework
     public static partial class Utility
     {
         /// <summary>
-        /// 加密解密相关的实用函数。
+        /// XOR 数据混淆相关的实用函数，不提供密码学安全性。
         /// </summary>
         public static class Encryption
         {
@@ -23,7 +23,9 @@ namespace RFramework
             /// <returns>异或后的二进制流。</returns>
             public static byte[] GetQuickXorBytes(byte[] bytes, byte[] code)
             {
-                return GetXorBytes(bytes, 0, QuickEncryptLength, code);
+                return bytes == null
+                    ? null
+                    : GetXorBytes(bytes, 0, Math.Min(bytes.Length, QuickEncryptLength), code);
             }
 
             /// <summary>
@@ -33,7 +35,11 @@ namespace RFramework
             /// <param name="code">异或二进制流。</param>
             public static void GetQuickSelfXorBytes(byte[] bytes, byte[] code)
             {
-                GetSelfXorBytes(bytes, 0, QuickEncryptLength, code);
+                if (bytes != null)
+                {
+                    GetSelfXorBytes(
+                        bytes, 0, Math.Min(bytes.Length, QuickEncryptLength), code);
+                }
             }
 
             /// <summary>
@@ -114,13 +120,15 @@ namespace RFramework
                     throw new RFrameworkException("Code length is invalid.");
                 }
 
-                if (startIndex < 0 || length < 0 || startIndex + length > bytes.Length)
+                if (startIndex < 0 || length < 0
+                    || startIndex > bytes.Length - length)
                 {
                     throw new RFrameworkException("Start index or length is invalid.");
                 }
 
                 int codeIndex = startIndex % codeLength;
-                for (int i = startIndex; i < length; i++)
+                int endIndex = startIndex + length;
+                for (int i = startIndex; i < endIndex; i++)
                 {
                     bytes[i] ^= code[codeIndex++];
                     codeIndex %= codeLength;

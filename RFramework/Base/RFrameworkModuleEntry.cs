@@ -64,7 +64,6 @@ namespace RFramework
             }
 
             frameworkModules.Clear();
-            Utility.Marshal.FreeCachedHGlobal();
 
             try
             {

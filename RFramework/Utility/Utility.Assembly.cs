@@ -31,7 +31,7 @@ namespace RFramework
             /// <returns>已加载的程序集。</returns>
             public static System.Reflection.Assembly[] GetAssemblies()
             {
-                return s_Assemblies;
+                return (System.Reflection.Assembly[])s_Assemblies.Clone();
             }
 
             /// <summary>

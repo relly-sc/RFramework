@@ -15,6 +15,7 @@ namespace RFramework
             /// CRC32 计算的缓存字节数组长度。
             /// </summary>
             private const int CachedBytesLength = 0x1000;
+            private static readonly object s_SyncRoot = new object();
             /// <summary>
             /// CRC32 计算使用的缓存字节数组。
             /// </summary>
@@ -53,15 +54,23 @@ namespace RFramework
                     throw new RFrameworkException("Bytes is invalid.");
                 }
 
-                if (offset < 0 || length < 0 || offset + length > bytes.Length)
+                if (offset < 0 || length < 0 || offset > bytes.Length - length)
                 {
                     throw new RFrameworkException("Offset or length is invalid.");
                 }
 
-                s_Algorithm.HashCore(bytes, offset, length);
-                int result = (int)s_Algorithm.HashFinal();
-                s_Algorithm.Initialize();
-                return result;
+                lock (s_SyncRoot)
+                {
+                    try
+                    {
+                        s_Algorithm.HashCore(bytes, offset, length);
+                        return (int)s_Algorithm.HashFinal();
+                    }
+                    finally
+                    {
+                        s_Algorithm.Initialize();
+                    }
+                }
             }
 
             /// <summary>
@@ -76,23 +85,29 @@ namespace RFramework
                     throw new RFrameworkException("Stream is invalid.");
                 }
 
-                while (true)
+                lock (s_SyncRoot)
                 {
-                    int bytesRead = stream.Read(s_CachedBytes, 0, CachedBytesLength);
-                    if (bytesRead > 0)
+                    try
                     {
-                        s_Algorithm.HashCore(s_CachedBytes, 0, bytesRead);
+                        while (true)
+                        {
+                            int bytesRead = stream.Read(s_CachedBytes, 0, CachedBytesLength);
+                            if (bytesRead <= 0)
+                            {
+                                break;
+                            }
+
+                            s_Algorithm.HashCore(s_CachedBytes, 0, bytesRead);
+                        }
+
+                        return (int)s_Algorithm.HashFinal();
                     }
-                    else
+                    finally
                     {
-                        break;
+                        s_Algorithm.Initialize();
+                        Array.Clear(s_CachedBytes, 0, CachedBytesLength);
                     }
                 }
-
-                int result = (int)s_Algorithm.HashFinal();
-                s_Algorithm.Initialize();
-                Array.Clear(s_CachedBytes, 0, CachedBytesLength);
-                return result;
             }
 
             /// <summary>
@@ -102,7 +117,13 @@ namespace RFramework
             /// <returns>CRC32 数值的二进制数组。</returns>
             public static byte[] GetCrc32Bytes(int crc32)
             {
-                return new byte[] { (byte)((crc32 >> 24) & 0xff), (byte)((crc32 >> 16) & 0xff), (byte)((crc32 >> 8) & 0xff), (byte)(crc32 & 0xff) };
+                return new byte[]
+                {
+                    (byte)((crc32 >> 24) & 0xff),
+                    (byte)((crc32 >> 16) & 0xff),
+                    (byte)((crc32 >> 8) & 0xff),
+                    (byte)(crc32 & 0xff)
+                };
             }
 
             /// <summary>
@@ -128,7 +149,7 @@ namespace RFramework
                     throw new RFrameworkException("Result is invalid.");
                 }
 
-                if (offset < 0 || offset + 4 > bytes.Length)
+                if (offset < 0 || offset > bytes.Length - sizeof(int))
                 {
                     throw new RFrameworkException("Offset or length is invalid.");
                 }
@@ -139,67 +160,6 @@ namespace RFramework
                 bytes[offset + 3] = (byte)(crc32 & 0xff);
             }
 
-            /// <summary>
-            /// 从流中计算 CRC32 校验值。
-            /// </summary>
-            /// <param name="stream">指定的数据流。</param>
-            /// <param name="code">异或校验码。</param>
-            /// <param name="length">校验长度。</param>
-            /// <returns>计算后的 CRC32。</returns>
-            internal static int GetCrc32(Stream stream, byte[] code, int length)
-            {
-                if (stream == null)
-                {
-                    throw new RFrameworkException("Stream is invalid.");
-                }
-
-                if (code == null)
-                {
-                    throw new RFrameworkException("Code is invalid.");
-                }
-
-                int codeLength = code.Length;
-                if (codeLength <= 0)
-                {
-                    throw new RFrameworkException("Code length is invalid.");
-                }
-
-                int bytesLength = (int)stream.Length;
-                if (length < 0 || length > bytesLength)
-                {
-                    length = bytesLength;
-                }
-
-                int codeIndex = 0;
-                while (true)
-                {
-                    int bytesRead = stream.Read(s_CachedBytes, 0, CachedBytesLength);
-                    if (bytesRead > 0)
-                    {
-                        if (length > 0)
-                        {
-                            for (int i = 0; i < bytesRead && i < length; i++)
-                            {
-                                s_CachedBytes[i] ^= code[codeIndex++];
-                                codeIndex %= codeLength;
-                            }
-
-                            length -= bytesRead;
-                        }
-
-                        s_Algorithm.HashCore(s_CachedBytes, 0, bytesRead);
-                    }
-                    else
-                    {
-                        break;
-                    }
-                }
-
-                int result = (int)s_Algorithm.HashFinal();
-                s_Algorithm.Initialize();
-                Array.Clear(s_CachedBytes, 0, CachedBytesLength);
-                return result;
-            }
         }
     }
 }
