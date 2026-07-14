@@ -2,11 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
-using RFramework.Event;
-using RFramework.Pool;
-using RFramework.Resource;
 
-namespace RFramework.Entity
+namespace RFramework
 {
     /// <summary>
     /// 实体模块核心实现。

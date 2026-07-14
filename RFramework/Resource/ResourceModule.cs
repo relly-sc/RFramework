@@ -2,10 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
-using RFramework;
-using RFramework.Event;
 
-namespace RFramework.Resource
+namespace RFramework
 {
     /// <summary>
     /// 资源模块核心实现。

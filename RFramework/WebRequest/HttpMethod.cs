@@ -1,4 +1,4 @@
-namespace RFramework.WebRequest
+namespace RFramework
 {
     /// <summary>
     /// HTTP 请求方法枚举。

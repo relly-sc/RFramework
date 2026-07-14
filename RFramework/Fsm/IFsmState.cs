@@ -1,4 +1,4 @@
-namespace RFramework.Fsm
+namespace RFramework
 {
     /// <summary>
     /// 有限状态机状态接口。

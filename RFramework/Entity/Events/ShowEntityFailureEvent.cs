@@ -1,4 +1,4 @@
-namespace RFramework.Entity
+namespace RFramework
 {
     /// <summary>
     /// 显示实体失败事件。

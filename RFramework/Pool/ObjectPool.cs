@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace RFramework.Pool
+namespace RFramework
 {
     /// <summary>
     /// 泛型对象池实现。

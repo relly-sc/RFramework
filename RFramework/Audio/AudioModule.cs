@@ -1,10 +1,7 @@
 using System;
 using System.Collections.Generic;
-using RFramework.Event;
-using RFramework.Pool;
-using RFramework.Resource;
 
-namespace RFramework.Audio
+namespace RFramework
 {
     /// <summary>
     /// 音频模块核心实现。内置 BGM/SFX/UI 三组音轨，

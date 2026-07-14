@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace RFramework.WebRequest
+namespace RFramework
 {
     /// <summary>
     /// WebRequest 模块接口。

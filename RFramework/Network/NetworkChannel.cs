@@ -3,10 +3,8 @@ using System.Collections.Generic;
 using System.Collections.Concurrent;
 using System.Threading;
 using System.Threading.Tasks;
-using RFramework.Event;
-using RFramework.Timer;
 
-namespace RFramework.Network
+namespace RFramework
 {
     /// <summary>
     /// 网络通道实现。管理单个服务器连接的完整生命周期：
@@ -86,12 +84,12 @@ namespace RFramework.Network
         /// <summary>
         /// 心跳计时器引用。
         /// </summary>
-        private Timer.Timer heartbeatTimer;
+        private Timer heartbeatTimer;
 
         /// <summary>
         /// 重连计时器引用。
         /// </summary>
-        private Timer.Timer reconnectTimer;
+        private Timer reconnectTimer;
 
         /// <summary>
         /// 构造网络通道。
@@ -383,10 +381,13 @@ namespace RFramework.Network
             if (Interlocked.Increment(ref queuedCallbackCount) > MaxQueuedCallbacks && !isCritical)
             {
                 Interlocked.Decrement(ref queuedCallbackCount);
-                if (Interlocked.Exchange(ref callbackOverflowReported, 1) == 0 && RFrameworkLog.IsInitialized)
+                if (Interlocked.Exchange(ref callbackOverflowReported, 1) == 0)
                 {
-                    RFrameworkLog.Warning(
-                        "Network channel '{0}' callback queue overflow. Non-critical callbacks are being dropped.", Name);
+                    string message = Utility.Text.Format(
+                        "Network channel '{0}' callback queue overflow. "
+                        + "Non-critical callbacks are being dropped.", Name);
+                    EnqueueCallback(
+                        () => eventModule?.FireSafely(new NetworkErrorEvent(Name, message)), true);
                 }
 
                 return;
@@ -455,7 +456,7 @@ namespace RFramework.Network
                 return;
             }
 
-            heartbeatTimer = Timer.Timer.CreateRepeat(
+            heartbeatTimer = Timer.CreateRepeat(
                 0f,
                 heartbeatInterval,
                 () =>
@@ -500,7 +501,7 @@ namespace RFramework.Network
         {
             isReconnecting = true;
 
-            reconnectTimer = Timer.Timer.CreateOnce(
+            reconnectTimer = Timer.CreateOnce(
                 reconnectInterval,
                 () => { _ = ReconnectAsync(); });
             timerModule?.RegisterTimer(reconnectTimer);

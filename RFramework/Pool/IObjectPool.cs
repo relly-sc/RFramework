@@ -1,6 +1,6 @@
 using System;
 
-namespace RFramework.Pool
+namespace RFramework
 {
     /// <summary>
     /// 对象池接口，表示单个类型的对象池实例。

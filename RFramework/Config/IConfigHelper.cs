@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace RFramework.Config
+namespace RFramework
 {
     /// <summary>
     /// 配置辅助器接口。
@@ -21,7 +21,8 @@ namespace RFramework.Config
 
         /// <summary>
         /// 解析配置原始字节为强类型配置表对象。
-        /// 由 Runtime 层使用 Luban 的 ByteBuf 反序列化实现。
+        /// 字节格式由具体 Helper 决定，例如 UTF-8 JSON、框架二进制协议、Luban ByteBuf 或私有格式。
+        /// 此入口与 ParseConfigFromString 相互独立，不应在 Library 层假定具体格式。
         /// </summary>
         /// <param name="tableType">表类型（由 GetTableType 返回）。</param>
         /// <param name="bytes">原始字节数据。</param>
@@ -32,6 +33,7 @@ namespace RFramework.Config
         /// 从 JSON 字符串解析为强类型配置表对象。
         /// JSON 格式应为配置行数组：[{"Id":1,...},{"Id":2,...}]。
         /// 适用于运行时动态生成配置、编辑器预览、单元测试等场景。
+        /// 不要求 ParseConfig 使用相同的数据格式。
         /// </summary>
         /// <param name="tableType">表类型（由 GetTableType 返回）。</param>
         /// <param name="json">JSON 字符串。</param>

@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace RFramework.Event
+namespace RFramework
 {
     /// <summary>
     /// 事件组，Dispose() 一键取消组内所有事件订阅。

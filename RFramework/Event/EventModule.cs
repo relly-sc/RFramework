@@ -1,13 +1,16 @@
 using System;
 using System.Collections.Generic;
 
-namespace RFramework.Event
+namespace RFramework
 {
     /// <summary>
     /// 事件模块。支持 struct 消息（栈分配零 GC）和 class 消息（引用传递）。
     /// </summary>
     internal sealed class EventModule : RFrameworkModule, IEventModule
     {
+        /// <inheritdoc/>
+        public event Action<RFrameworkException> OnError;
+
         /// <summary>
         /// 处理函数存储：Type → 该类型的所有处理函数链表。
         /// 使用 LinkedList 以 O(1) 增删，配合 CachedNodes 支持遍历中安全删除。
@@ -108,6 +111,7 @@ namespace RFramework.Event
 
             handlers.Clear();
             cachedNodes.Clear();
+            OnError = null;
         }
 
         /// <summary>
@@ -305,10 +309,8 @@ namespace RFramework.Event
             }
             catch (Exception ex)
             {
-                if (RFrameworkLog.IsInitialized)
-                {
-                    RFrameworkLog.Error(ex);
-                }
+                RaiseError(new RFrameworkException(
+                    $"EventModule: safe dispatch for '{typeof(T).Name}' failed.", ex));
             }
         }
 
@@ -331,6 +333,28 @@ namespace RFramework.Event
         public EventGroup CreateGroup()
         {
             return new EventGroup(this);
+        }
+
+        private void RaiseError(RFrameworkException error)
+        {
+            Action<RFrameworkException> handlersSnapshot = OnError;
+            if (handlersSnapshot == null)
+            {
+                return;
+            }
+
+            Delegate[] callbacks = handlersSnapshot.GetInvocationList();
+            for (int i = 0; i < callbacks.Length; i++)
+            {
+                try
+                {
+                    ((Action<RFrameworkException>)callbacks[i]).Invoke(error);
+                }
+                catch
+                {
+                    // 错误观察者不得破坏 FireSafely 的异常隔离契约。
+                }
+            }
         }
 
         /// <summary>

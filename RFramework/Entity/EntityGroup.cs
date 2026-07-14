@@ -1,8 +1,7 @@
 using System;
 using System.Collections.Generic;
-using RFramework.Pool;
 
-namespace RFramework.Entity
+namespace RFramework
 {
     /// <summary>
     /// 实体组实现，管理同类型实体的集合及其专属对象池。

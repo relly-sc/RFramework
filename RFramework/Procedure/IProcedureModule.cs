@@ -1,4 +1,4 @@
-namespace RFramework.Procedure
+namespace RFramework
 {
     /// <summary>
     /// 流程模块接口。

@@ -1,4 +1,4 @@
-namespace RFramework.Network
+namespace RFramework
 {
     /// <summary>
     /// 网络辅助器接口。负责底层传输实现（TCP/WebSocket/KCP），

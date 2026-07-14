@@ -1,4 +1,4 @@
-namespace RFramework.Scene
+namespace RFramework
 {
     /// <summary>
     /// 场景卸载成功事件。由 SceneModule 在 UnloadSceneAsync 完成后分发。

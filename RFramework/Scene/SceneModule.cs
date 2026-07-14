@@ -2,10 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
-using RFramework.Event;
-using RFramework.Resource;
 
-namespace RFramework.Scene
+namespace RFramework
 {
     /// <summary>
     /// 场景模块核心实现。以 GF SceneManager 为蓝本，

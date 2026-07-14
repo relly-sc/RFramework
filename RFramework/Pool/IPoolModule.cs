@@ -1,6 +1,6 @@
 using System;
 
-namespace RFramework.Pool
+namespace RFramework
 {
     /// <summary>
     /// 对象池服务接口。通过委托注入行为，不强制继承基类。

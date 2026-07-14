@@ -1,6 +1,6 @@
 using System;
 
-namespace RFramework.Timer
+namespace RFramework
 {
     /// <summary>
     /// 计时器句柄。基于 (延迟, 间隔, 时长, 次数) 四参数模型，

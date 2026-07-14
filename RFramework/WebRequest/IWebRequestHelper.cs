@@ -2,7 +2,7 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace RFramework.WebRequest
+namespace RFramework
 {
     /// <summary>
     /// WebRequest 辅助器接口（跨引擎桥接层）。

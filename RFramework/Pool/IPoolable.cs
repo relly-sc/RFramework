@@ -1,4 +1,4 @@
-namespace RFramework.Pool
+namespace RFramework
 {
     /// <summary>
     /// 可池化对象接口。

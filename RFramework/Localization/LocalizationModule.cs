@@ -1,274 +1,263 @@
 using System;
 using System.Collections.Generic;
-using System.Threading.Tasks;
-using RFramework.Event;
-using RFramework.Resource;
 
-namespace RFramework.Localization
+namespace RFramework
 {
     /// <summary>
-    /// 本地化模块核心实现。
-    /// 管理语言包字典（language → key → value），
-    /// 支持运行时语言切换 + 占位符格式化 + 事件分发。
+    /// 本地化模块核心实现。管理每语言一个字典，不参与资源加载和具体格式解析。
     /// </summary>
     internal sealed class LocalizationModule : RFrameworkModule, ILocalizationModule
     {
-        /// <summary>
-        /// 本地化辅助器引用。
-        /// </summary>
-        private ILocalizationHelper localizationHelper;
-
-        /// <summary>
-        /// 资源模块引用（预留）。
-        /// </summary>
-        private IResourceModule resourceModule;
-
-        /// <summary>
-        /// 事件模块引用。
-        /// </summary>
-        private IEventModule eventModule;
-
-        /// <summary>
-        /// 支持的语言代码列表。
-        /// </summary>
         private readonly List<string> supportedLanguages = new List<string>();
+        private readonly Dictionary<string, Dictionary<string, string>> languageDicts =
+            new Dictionary<string, Dictionary<string, string>>();
 
-        /// <summary>
-        /// 语言包字典：language → （key → value）。
-        /// </summary>
-        private readonly Dictionary<string, Dictionary<string, string>> languageDicts = new Dictionary<string, Dictionary<string, string>>();
-
-        /// <summary>
-        /// 当前语言代码。
-        /// </summary>
+        private ILocalizationHelper localizationHelper;
+        private IEventModule eventModule;
         private string currentLanguage;
 
-        /// <inheritdoc/>
-        public string CurrentLanguage
-        {
-            get { return currentLanguage; }
-        }
+        public string CurrentLanguage => currentLanguage;
 
-        /// <inheritdoc/>
-        public IReadOnlyList<string> SupportedLanguages
-        {
-            get { return supportedLanguages; }
-        }
+        public IReadOnlyList<string> SupportedLanguages => supportedLanguages;
 
-        /// <inheritdoc/>
-        public int LoadedLanguageCount
-        {
-            get { return languageDicts.Count; }
-        }
+        public int LoadedLanguageCount => languageDicts.Count;
 
-        /// <inheritdoc/>
-        internal override int Priority
-        {
-            get
-            {
-                return 40;
-            }
-        }
+        internal override int Priority => 40;
 
-        /// <inheritdoc/>
         public void SetHelper(ILocalizationHelper helper)
         {
+            if (helper == null)
+            {
+                throw new RFrameworkException("Localization helper is invalid.");
+            }
+
+            if (languageDicts.Count > 0 && !ReferenceEquals(localizationHelper, helper))
+            {
+                throw new RFrameworkException(
+                    "Localization helper cannot be replaced while language packs are loaded. "
+                    + "Unload all language packs first.");
+            }
+
             localizationHelper = helper;
         }
 
-        /// <inheritdoc/>
-        public void SetDependencies(IResourceModule resourceModule, IEventModule eventModule)
+        public void LoadLanguage(string language, byte[] bytes)
         {
-            this.resourceModule = resourceModule;
-            this.eventModule = eventModule;
+            ValidateLanguage(language);
+            EnsureHelper();
+            if (bytes == null || bytes.Length == 0)
+            {
+                throw new RFrameworkException($"Language data for '{language}' is empty.");
+            }
+
+            Dictionary<string, string> parsed = localizationHelper.ParseLanguage(language, bytes);
+            ReplaceLanguage(language, parsed);
         }
 
-        /// <inheritdoc/>
-        public Task LoadLanguageAsync(string language)
+        public void LoadLanguageFromString(string language, string json)
         {
-            if (string.IsNullOrEmpty(language))
+            ValidateLanguage(language);
+            EnsureHelper();
+            if (string.IsNullOrWhiteSpace(json))
             {
-                throw new RFrameworkException("Language code is invalid.");
+                throw new RFrameworkException($"Language JSON for '{language}' is empty.");
             }
 
-            if (localizationHelper == null)
-            {
-                throw new RFrameworkException("Localization helper is not set.");
-            }
-
-            LoadLanguageInternal(language);
-            return Task.CompletedTask;
+            Dictionary<string, string> parsed = localizationHelper.ParseLanguageFromString(language, json);
+            ReplaceLanguage(language, parsed);
         }
 
-        /// <inheritdoc/>
-        public Task SwitchLanguageAsync(string language)
+        public void SwitchLanguage(string language)
         {
-            if (string.IsNullOrEmpty(language))
+            ValidateLanguage(language);
+            if (!languageDicts.ContainsKey(language))
             {
-                throw new RFrameworkException("Language code is invalid.");
-            }
-
-            if (localizationHelper == null)
-            {
-                throw new RFrameworkException("Localization helper is not set.");
+                throw new RFrameworkException(
+                    $"Language '{language}' is not loaded. Load it before switching.");
             }
 
             string previous = currentLanguage;
-
-            // 加载目标语言包（如果还未加载）
-            if (!languageDicts.ContainsKey(language))
-            {
-                LoadLanguageInternal(language);
-            }
-
-            // 切换当前语言
             currentLanguage = language;
 
-            // 添加到支持列表（首次使用时自动注册）
-            if (!supportedLanguages.Contains(language))
+            IEventModule evt = GetEventModule();
+            if (evt != null && previous != null && previous != language)
             {
-                supportedLanguages.Add(language);
+                evt.FireSafely(new LanguageChangedEvent(previous, language));
             }
-
-            // 分发事件
-            if (eventModule != null && previous != null && previous != language)
-            {
-                eventModule.FireSafely(new LanguageChangedEvent(previous, language));
-            }
-
-            return Task.CompletedTask;
         }
 
-        /// <inheritdoc/>
+        public bool HasLanguage(string language)
+        {
+            return !string.IsNullOrEmpty(language) && languageDicts.ContainsKey(language);
+        }
+
         public void UnloadLanguage(string language)
         {
-            if (languageDicts.TryGetValue(language, out Dictionary<string, string> dict))
+            if (string.IsNullOrEmpty(language)
+                || !languageDicts.TryGetValue(language, out Dictionary<string, string> dict))
             {
-                localizationHelper?.UnloadLanguageDict(language);
+                return;
+            }
+
+            Exception releaseError = null;
+            try
+            {
+                localizationHelper?.ReleaseLanguage(language, dict);
+            }
+            catch (Exception ex)
+            {
+                releaseError = ex;
+            }
+            finally
+            {
                 languageDicts.Remove(language);
                 supportedLanguages.Remove(language);
-
-                // 如果卸载的是当前语言，清除当前语言引用
                 if (currentLanguage == language)
                 {
                     currentLanguage = null;
                 }
             }
+
+            if (releaseError != null)
+            {
+                throw new RFrameworkException(
+                    $"Failed to release language '{language}'.", releaseError);
+            }
         }
 
-        /// <inheritdoc/>
         public string GetString(string key)
         {
             return GetStringInternal(key);
         }
 
-        /// <inheritdoc/>
         public string GetString(string key, params object[] args)
         {
             string format = GetStringInternal(key);
-
-            if (args != null && args.Length > 0)
+            if (format == null || args == null || args.Length == 0)
             {
-                try
-                {
-                    return string.Format(format, args);
-                }
-                catch (FormatException)
-                {
-                    return format;
-                }
+                return format;
             }
 
-            return format;
+            try
+            {
+                return string.Format(format, args);
+            }
+            catch (FormatException)
+            {
+                return format;
+            }
         }
 
-        /// <inheritdoc/>
         public bool HasString(string key)
         {
-            if (currentLanguage == null)
-            {
-                return false;
-            }
-
-            if (!languageDicts.TryGetValue(currentLanguage, out Dictionary<string, string> dict))
-            {
-                return false;
-            }
-
-            return dict.ContainsKey(key);
+            return key != null
+                && currentLanguage != null
+                && languageDicts.TryGetValue(currentLanguage, out Dictionary<string, string> dict)
+                && dict.ContainsKey(key);
         }
 
-        /// <inheritdoc/>
         internal override void Update(float elapseSeconds, float realElapseSeconds)
         {
         }
 
-        /// <inheritdoc/>
         internal override void Shutdown()
         {
-            // 卸载所有语言包
             if (localizationHelper != null)
             {
-                foreach (string lang in languageDicts.Keys)
+                foreach (KeyValuePair<string, Dictionary<string, string>> pair in languageDicts)
                 {
-                    localizationHelper.UnloadLanguageDict(lang);
+                    try
+                    {
+                        localizationHelper.ReleaseLanguage(pair.Key, pair.Value);
+                    }
+                    catch
+                    {
+                        // 关闭阶段逐项尽力清理，单个 Helper 异常不能阻断框架关闭。
+                    }
                 }
             }
 
             languageDicts.Clear();
             supportedLanguages.Clear();
             currentLanguage = null;
+            localizationHelper = null;
+            eventModule = null;
         }
 
-        /// <summary>
-        /// 内部加载语言包：调用 Helper 获取字典 → 缓存到 languageDicts。
-        /// </summary>
-        /// <param name="language">语言代码。</param>
-        private void LoadLanguageInternal(string language)
+        private void ReplaceLanguage(string language, Dictionary<string, string> parsed)
         {
-            Dictionary<string, string> dict = localizationHelper.LoadLanguageDict(language);
-            if (dict == null)
+            if (parsed == null || parsed.Count == 0)
             {
-                throw new RFrameworkException($"Failed to load language '{language}'. Helper returned null.");
+                throw new RFrameworkException(
+                    $"Failed to load language '{language}'. Helper returned no entries.");
             }
 
-            languageDicts[language] = dict;
-
-            // 若尚无当前语言，自动设为第一个加载的语言
-            if (currentLanguage == null)
-            {
-                currentLanguage = language;
-            }
-
+            bool hadOld = languageDicts.TryGetValue(language, out Dictionary<string, string> old);
+            languageDicts[language] = parsed;
             if (!supportedLanguages.Contains(language))
             {
                 supportedLanguages.Add(language);
             }
+
+            if (hadOld && !ReferenceEquals(old, parsed))
+            {
+                try
+                {
+                    localizationHelper.ReleaseLanguage(language, old);
+                }
+                catch
+                {
+                    // 新语言包已成功提交，旧包释放失败不应回滚有效数据。
+                }
+            }
         }
 
-        /// <summary>
-        /// 内部查询：从当前语言字典中获取文本。key 不存在时返回 key 本身。
-        /// </summary>
-        /// <param name="key">文本 key。</param>
-        /// <returns>本地化文本。</returns>
+        private static void ValidateLanguage(string language)
+        {
+            if (string.IsNullOrWhiteSpace(language))
+            {
+                throw new RFrameworkException("Language code is invalid.");
+            }
+        }
+
+        private void EnsureHelper()
+        {
+            if (localizationHelper == null)
+            {
+                throw new RFrameworkException("Localization helper is not set.");
+            }
+        }
+
+        private IEventModule GetEventModule()
+        {
+            if (eventModule != null)
+            {
+                return eventModule;
+            }
+
+            try
+            {
+                eventModule = RFrameworkModuleEntry.GetModule<IEventModule>();
+            }
+            catch
+            {
+                return null;
+            }
+
+            return eventModule;
+        }
+
         private string GetStringInternal(string key)
         {
-            if (currentLanguage == null)
+            if (key == null || currentLanguage == null)
             {
                 return key;
             }
 
-            if (!languageDicts.TryGetValue(currentLanguage, out Dictionary<string, string> dict))
-            {
-                return key;
-            }
-
-            if (!dict.TryGetValue(key, out string value))
-            {
-                return key;
-            }
-
-            return value;
+            return languageDicts.TryGetValue(currentLanguage, out Dictionary<string, string> dict)
+                && dict.TryGetValue(key, out string value)
+                ? value
+                : key;
         }
     }
 }

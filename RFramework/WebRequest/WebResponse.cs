@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using System.Text;
 
-namespace RFramework.WebRequest
+namespace RFramework
 {
     /// <summary>
     /// HTTP 响应结构体（纯 C# 数据类，零 Unity 依赖）。

@@ -44,7 +44,10 @@ namespace RFramework
         /// 关闭并清理所有框架模块。
         /// 按 Priority 升序遍历：优先级低的模块先释放。
         /// </summary>
-        public static void Shutdown()
+        /// <param name="clearLogHelper">
+        /// 是否在关闭结束时清空日志 Helper。Runtime 可传 false，记录聚合异常后再手动清空。
+        /// </param>
+        public static void Shutdown(bool clearLogHelper = true)
         {
             List<Exception> errors = null;
             for (LinkedListNode<RFrameworkModule> node = frameworkModules.First; node != null; node = node.Next)
@@ -72,9 +75,11 @@ namespace RFramework
             }
             finally
             {
-                // Static helpers must not retain a destroyed Runtime logger
-                // when one module failed during shutdown.
-                RFrameworkLog.SetLogHelper(null);
+                if (clearLogHelper)
+                {
+                    // 无论模块关闭是否失败，都不能保留已销毁的 Runtime 日志 Helper。
+                    RFrameworkLog.SetLogHelper(null);
+                }
             }
         }
 

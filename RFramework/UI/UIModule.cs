@@ -2,11 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
-using RFramework.Event;
-using RFramework.Pool;
-using RFramework.Resource;
 
-namespace RFramework.UI
+namespace RFramework
 {
     /// <summary>
     /// UI 模块核心实现。融合 GF UIManager 和 UniWindow 的设计：

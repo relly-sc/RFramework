@@ -1,4 +1,4 @@
-namespace RFramework.Resource
+namespace RFramework
 {
     /// <summary>
     /// 资源运行模式

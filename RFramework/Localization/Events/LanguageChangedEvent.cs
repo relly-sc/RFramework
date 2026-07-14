@@ -1,4 +1,4 @@
-namespace RFramework.Localization
+namespace RFramework
 {
     /// <summary>
     /// 语言切换事件。由 LocalizationModule 在 SwitchLanguageAsync 成功后分发。

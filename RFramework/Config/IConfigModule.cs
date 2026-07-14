@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace RFramework.Config
+namespace RFramework
 {
     /// <summary>
     /// 配置模块接口。
@@ -17,11 +17,11 @@ namespace RFramework.Config
         void SetHelper(IConfigHelper helper);
 
         /// <summary>
-        /// 从字节数据加载配置表。T 为 Luban 生成的配置行类型（如 ItemConfig）。
+        /// 从字节数据加载配置表。具体 JSON、二进制或自定义格式由当前 IConfigHelper 决定。
         /// 内部通过 IConfigHelper.GetTableType 映射行类型→表类型，然后解析并缓存。
         /// 重复加载相同类型会覆盖旧数据。
         /// </summary>
-        /// <typeparam name="T">配置行类型。</typeparam>
+        /// <typeparam name="T">配置行类型（如 ItemConfig）。</typeparam>
         /// <param name="configBytes">配置原始字节数据。</param>
         void LoadConfig<T>(byte[] configBytes) where T : class;
 

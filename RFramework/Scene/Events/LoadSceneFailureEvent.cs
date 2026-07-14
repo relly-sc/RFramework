@@ -1,4 +1,4 @@
-namespace RFramework.Scene
+namespace RFramework
 {
     /// <summary>
     /// 场景加载失败事件。由 SceneModule 在 LoadSceneAsync 失败时分发。

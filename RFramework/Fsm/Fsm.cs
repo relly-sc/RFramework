@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace RFramework.Fsm
+namespace RFramework
 {
     /// <summary>
     /// FSM 内部基类，提供 FsmModule 可调用的非泛型 Update 和 Shutdown 入口。

@@ -1,6 +1,6 @@
 using System;
 
-namespace RFramework.Audio
+namespace RFramework
 {
     /// <summary>
     /// 音效句柄（轻量值类型，通过内部 ID 追踪单个播放中的音效）。

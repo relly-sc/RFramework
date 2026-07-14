@@ -1,4 +1,4 @@
-namespace RFramework.UI
+namespace RFramework
 {
     /// <summary>
     /// UI 辅助器接口，封装引擎特定的 UI 创建与销毁操作。

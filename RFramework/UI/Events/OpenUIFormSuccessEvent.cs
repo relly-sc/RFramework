@@ -1,4 +1,4 @@
-namespace RFramework.UI
+namespace RFramework
 {
     /// <summary>
     /// UI 打开成功事件。由 UIModule 在 OpenUIFormAsync 完成后分发。

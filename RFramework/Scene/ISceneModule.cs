@@ -2,10 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
-using RFramework.Event;
-using RFramework.Resource;
 
-namespace RFramework.Scene
+namespace RFramework
 {
     /// <summary>
     /// 场景模块接口，管理 Unity 场景的加载、卸载和状态追踪。

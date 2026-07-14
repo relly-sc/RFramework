@@ -1,4 +1,4 @@
-namespace RFramework.Entity
+namespace RFramework
 {
     /// <summary>
     /// 隐藏实体完成事件。

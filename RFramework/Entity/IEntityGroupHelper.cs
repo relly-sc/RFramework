@@ -1,4 +1,4 @@
-namespace RFramework.Entity
+namespace RFramework
 {
     /// <summary>
     /// 实体组辅助器接口，作为实体组的扩展点。

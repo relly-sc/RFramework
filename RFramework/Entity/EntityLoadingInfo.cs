@@ -1,4 +1,4 @@
-namespace RFramework.Entity
+namespace RFramework
 {
     /// <summary>
     /// 实体加载上下文，记录异步加载中的实体信息。

@@ -1,4 +1,4 @@
-namespace RFramework.Pool
+namespace RFramework
 {
     /// <summary>
     /// 对象池内部基接口（非泛型），供 PoolModule 统一管理不同泛型的对象池。

@@ -1,4 +1,4 @@
-namespace RFramework.Network
+namespace RFramework
 {
     /// <summary>
     /// 网络断开事件。包含通道名称，用于区分不同服务器的断开。

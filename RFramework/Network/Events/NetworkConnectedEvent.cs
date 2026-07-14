@@ -1,4 +1,4 @@
-namespace RFramework.Network
+namespace RFramework
 {
     /// <summary>
     /// 网络连接成功事件。包含通道名称，用于区分不同服务器的连接。

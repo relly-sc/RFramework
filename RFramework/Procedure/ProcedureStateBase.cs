@@ -1,6 +1,4 @@
-using RFramework.Fsm;
-
-namespace RFramework.Procedure
+namespace RFramework
 {
     /// <summary>
     /// 流程状态抽象基类。

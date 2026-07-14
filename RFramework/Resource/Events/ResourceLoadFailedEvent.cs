@@ -1,6 +1,6 @@
 using System;
 
-namespace RFramework.Resource
+namespace RFramework
 {
     /// <summary>
     /// 资源加载失败事件。

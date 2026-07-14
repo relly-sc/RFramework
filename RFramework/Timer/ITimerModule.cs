@@ -1,4 +1,4 @@
-namespace RFramework.Timer
+namespace RFramework
 {
     /// <summary>
     /// 计时器模块接口。管理所有活跃计时器的生命周期和 Update 驱动。

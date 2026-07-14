@@ -1,4 +1,4 @@
-namespace RFramework.Scene
+namespace RFramework
 {
     /// <summary>
     /// 场景加载成功事件。由 SceneModule 在 LoadSceneAsync 完成后分发。

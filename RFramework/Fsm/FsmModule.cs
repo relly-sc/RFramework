@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace RFramework.Fsm
+namespace RFramework
 {
     /// <summary>
     /// 有限状态机模块。

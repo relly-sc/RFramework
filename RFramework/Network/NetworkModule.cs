@@ -1,10 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
-using RFramework.Event;
-using RFramework.Timer;
 
-namespace RFramework.Network
+namespace RFramework
 {
     /// <summary>
     /// 网络模块核心实现。作为通道管理器，支持同时管理多个服务器连接。

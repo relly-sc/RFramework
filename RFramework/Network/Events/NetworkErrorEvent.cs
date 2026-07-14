@@ -1,4 +1,4 @@
-namespace RFramework.Network
+namespace RFramework
 {
     /// <summary>
     /// 网络错误事件。包含通道名称和错误描述信息。

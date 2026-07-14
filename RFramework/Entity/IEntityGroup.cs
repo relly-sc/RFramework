@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace RFramework.Entity
+namespace RFramework
 {
     /// <summary>
     /// 实体组接口，管理同类型实体的集合及其专属对象池。

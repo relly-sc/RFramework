@@ -1,6 +1,6 @@
 using System;
 
-namespace RFramework.Audio
+namespace RFramework
 {
     /// <summary>
     /// 音频辅助器接口，封装引擎特定的音频播放与回调操作。

@@ -1,4 +1,4 @@
-namespace RFramework.WebRequest
+namespace RFramework
 {
     /// <summary>
     /// MIME 内容类型枚举。

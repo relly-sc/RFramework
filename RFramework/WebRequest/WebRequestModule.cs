@@ -4,7 +4,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace RFramework.WebRequest
+namespace RFramework
 {
     /// <summary>
     /// WebRequest 模块实现。

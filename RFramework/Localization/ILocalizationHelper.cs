@@ -1,24 +1,27 @@
 using System.Collections.Generic;
 
-namespace RFramework.Localization
+namespace RFramework
 {
     /// <summary>
-    /// 本地化辅助器接口。负责语言包的实际加载与卸载，
-    /// 将具体数据格式（Luban 表 / CSV / JSON / Unity Package）封装在实现中。
+    /// 本地化数据解析辅助器。只负责把原始数据解析为语言字典，不负责加载资源。
+    /// 字节数据可以是 JSON、框架二进制协议或用户自定义格式。
     /// </summary>
     public interface ILocalizationHelper
     {
         /// <summary>
-        /// 加载指定语言的语言包数据。
+        /// 从原始字节解析指定语言的语言包。
         /// </summary>
-        /// <param name="language">语言代码，如 "zh-CN"、"en-US"。</param>
-        /// <returns>key → 模板字符串 的字典。key 未找到时返回 null。</returns>
-        Dictionary<string, string> LoadLanguageDict(string language);
+        Dictionary<string, string> ParseLanguage(string language, byte[] bytes);
 
         /// <summary>
-        /// 卸载指定语言的语言包数据。
+        /// 从 JSON 字符串解析指定语言的语言包。
+        /// 不支持 JSON 的自定义 Helper 可明确抛出 NotSupportedException。
         /// </summary>
-        /// <param name="language">语言代码。</param>
-        void UnloadLanguageDict(string language);
+        Dictionary<string, string> ParseLanguageFromString(string language, string json);
+
+        /// <summary>
+        /// 释放已解析的语言包。默认字典实现通常只需清空字典。
+        /// </summary>
+        void ReleaseLanguage(string language, Dictionary<string, string> languageDict);
     }
 }

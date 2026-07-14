@@ -1,4 +1,4 @@
-namespace RFramework.Entity
+namespace RFramework
 {
     /// <summary>
     /// 实体状态枚举，描述实体在其生命周期中的当前阶段。

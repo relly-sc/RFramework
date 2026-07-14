@@ -2,7 +2,7 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace RFramework.Network
+namespace RFramework
 {
     /// <summary>
     /// 网络通道接口。每个通道代表与一个服务器的独立连接，

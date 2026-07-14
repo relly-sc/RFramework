@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace RFramework.WebRequest
+namespace RFramework
 {
     /// <summary>
     /// 请求数据结构体（纯 C#，零 Unity 依赖）。

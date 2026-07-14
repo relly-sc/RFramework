@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace RFramework.Procedure
+namespace RFramework
 {
     /// <summary>
     /// 流程黑板，用于跨流程状态共享数据。

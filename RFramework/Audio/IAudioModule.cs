@@ -1,9 +1,6 @@
 using System;
-using RFramework.Event;
-using RFramework.Pool;
-using RFramework.Resource;
 
-namespace RFramework.Audio
+namespace RFramework
 {
     /// <summary>
     /// 音频模块接口。提供 BGM/SFX/UI 三组内置音轨，

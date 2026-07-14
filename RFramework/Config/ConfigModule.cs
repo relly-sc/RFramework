@@ -1,12 +1,11 @@
 using System;
 using System.Collections.Generic;
-using RFramework.Event;
 
-namespace RFramework.Config
+namespace RFramework
 {
     /// <summary>
     /// 配置模块核心实现。
-    /// 负责配置表的内存缓存与查询，通过 IConfigHelper 与 Luban 等配置工具解耦。
+    /// 负责配置表的内存缓存与查询，通过 IConfigHelper 与 JSON、二进制及自定义格式解耦。
     /// 不涉及资源加载——字节数据由 Runtime ConfigComponent 通过 ResourceModule 获取后传入。
     /// </summary>
     internal sealed class ConfigModule : RFrameworkModule, IConfigModule
@@ -22,7 +21,7 @@ namespace RFramework.Config
 
         // ==================== 依赖注入 ====================
 
-        /// <summary>配置辅助器，封装 Luban 反序列化等引擎特定操作</summary>
+        /// <summary>配置辅助器，封装具体格式解析和表对象查询。</summary>
         private IConfigHelper helper;
 
         /// <summary>事件模块引用，用于分发加载成功/失败事件。惰性获取，可能为 null。</summary>
@@ -30,7 +29,7 @@ namespace RFramework.Config
 
         // ==================== 配置缓存 ====================
 
-        /// <summary>已加载配置表缓存：行类型 → 解析后的表对象（Luban 表实例）</summary>
+        /// <summary>已加载配置表缓存：行类型 → Helper 返回的表对象。</summary>
         private readonly Dictionary<Type, object> configTables = new Dictionary<Type, object>();
 
         /// <summary>已加载配置的元数据缓存：行类型 → 行数量</summary>
@@ -44,7 +43,19 @@ namespace RFramework.Config
         /// <param name="helper">配置辅助器实例，由 Runtime 层创建并注入。</param>
         public void SetHelper(IConfigHelper helper)
         {
-            this.helper = helper ?? throw new RFrameworkException("Config helper is invalid.");
+            if (helper == null)
+            {
+                throw new RFrameworkException("Config helper is invalid.");
+            }
+
+            if (configTables.Count > 0 && !ReferenceEquals(this.helper, helper))
+            {
+                throw new RFrameworkException(
+                    "Config helper cannot be replaced while config tables are loaded. "
+                    + "Unload all config tables first.");
+            }
+
+            this.helper = helper;
         }
 
         // ==================== 配置加载 ====================
@@ -54,7 +65,7 @@ namespace RFramework.Config
         /// 映射行类型→表类型 → 解析字节 → 缓存表对象。
         /// 重复加载相同类型会覆盖旧数据。
         /// </summary>
-        /// <typeparam name="T">配置行类型（Luban 生成的如 ItemConfig）。</typeparam>
+        /// <typeparam name="T">配置行类型（如 ItemConfig）。</typeparam>
         /// <param name="configBytes">配置原始字节数据。</param>
         public void LoadConfig<T>(byte[] configBytes) where T : class
         {
@@ -81,6 +92,12 @@ namespace RFramework.Config
 
                 // 2. 解析字节为表对象
                 object parsedTable = helper.ParseConfig(tableType, configBytes);
+                if (parsedTable == null)
+                {
+                    throw new RFrameworkException(
+                        $"ConfigModule: helper returned null while parsing '{rowType.Name}' from bytes.");
+                }
+
                 newTable = parsedTable;
 
                 // 3. 缓存（覆盖旧表）
@@ -167,6 +184,12 @@ namespace RFramework.Config
             {
                 Type tableType = helper.GetTableType(rowType);
                 object parsedTable = helper.ParseConfigFromString(tableType, json);
+                if (parsedTable == null)
+                {
+                    throw new RFrameworkException(
+                        $"ConfigModule: helper returned null while parsing '{rowType.Name}' from string.");
+                }
+
                 newTable = parsedTable;
                 configTables[rowType] = parsedTable;
 
@@ -228,9 +251,26 @@ namespace RFramework.Config
 
             if (configTables.TryGetValue(rowType, out object parsedTable))
             {
-                helper.ReleaseConfig(parsedTable);
-                configTables.Remove(rowType);
-                configRowCounts.Remove(rowType);
+                Exception releaseError = null;
+                try
+                {
+                    helper.ReleaseConfig(parsedTable);
+                }
+                catch (Exception ex)
+                {
+                    releaseError = ex;
+                }
+                finally
+                {
+                    configTables.Remove(rowType);
+                    configRowCounts.Remove(rowType);
+                }
+
+                if (releaseError != null)
+                {
+                    throw new RFrameworkException(
+                        $"ConfigModule: Failed to release config '{rowType.Name}'.", releaseError);
+                }
             }
         }
 
@@ -239,13 +279,30 @@ namespace RFramework.Config
         /// </summary>
         public void UnloadAllConfigs()
         {
+            Exception firstError = null;
             foreach (KeyValuePair<Type, object> kv in configTables)
             {
-                helper.ReleaseConfig(kv.Value);
+                try
+                {
+                    helper.ReleaseConfig(kv.Value);
+                }
+                catch (Exception ex)
+                {
+                    if (firstError == null)
+                    {
+                        firstError = ex;
+                    }
+                }
             }
 
             configTables.Clear();
             configRowCounts.Clear();
+
+            if (firstError != null)
+            {
+                throw new RFrameworkException(
+                    "ConfigModule: One or more config tables failed to release.", firstError);
+            }
         }
 
         // ==================== 配置查询 ====================
@@ -343,8 +400,17 @@ namespace RFramework.Config
         /// </summary>
         internal override void Shutdown()
         {
-            UnloadAllConfigs();
+            try
+            {
+                UnloadAllConfigs();
+            }
+            catch
+            {
+                // 关闭阶段已逐表完成尽力清理，释放异常不能阻断框架关闭。
+            }
+
             helper = null;
+            eventModule = null;
         }
 
         // ==================== 私有方法 ====================

@@ -2,7 +2,7 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace RFramework.Resource
+namespace RFramework
 {
     /// <summary>
     /// 资源模块接口。

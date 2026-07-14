@@ -2,10 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
-using RFramework.Event;
-using RFramework.Timer;
 
-namespace RFramework.Network
+namespace RFramework
 {
     /// <summary>
     /// 网络模块接口。通道管理器，支持同时连接多个服务器。

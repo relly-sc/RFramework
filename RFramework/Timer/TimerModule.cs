@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace RFramework.Timer
+namespace RFramework
 {
     /// <summary>
     /// 计时器模块。管理所有活跃计时器的 Update 驱动和生命周期清理，

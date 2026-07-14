@@ -1,4 +1,4 @@
-namespace RFramework.UI
+namespace RFramework
 {
     public readonly struct OpenUIFormFailureEvent
     {

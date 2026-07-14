@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace RFramework.Pool
+namespace RFramework
 {
     /// <summary>
     /// 对象池模块。通过泛型 + 可选参数 + 委托注入实现零侵入池化。

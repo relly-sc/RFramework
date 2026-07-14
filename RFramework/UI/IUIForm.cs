@@ -1,4 +1,4 @@
-namespace RFramework.UI
+namespace RFramework
 {
     /// <summary>
     /// UI 表单接口，描述一个 UI 面板的状态和生命周期。

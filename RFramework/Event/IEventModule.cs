@@ -1,12 +1,18 @@
 using System;
 
-namespace RFramework.Event
+namespace RFramework
 {
     /// <summary>
     /// 事件模块接口。提供类型安全、零 GC 的发布-订阅事件系统。
     /// </summary>
     public interface IEventModule
     {
+        /// <summary>
+        /// 安全分发捕获到订阅者异常时触发。
+        /// Runtime 层应订阅此事件并通过统一日志入口记录。
+        /// </summary>
+        event Action<RFrameworkException> OnError;
+
         /// <summary>
         /// 获取已注册的事件处理函数总数。
         /// </summary>

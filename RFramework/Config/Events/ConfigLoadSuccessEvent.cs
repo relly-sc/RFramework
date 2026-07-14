@@ -1,6 +1,6 @@
 using System;
 
-namespace RFramework.Config
+namespace RFramework
 {
     /// <summary>
     /// 配置加载成功事件。

@@ -1,4 +1,4 @@
-namespace RFramework.Entity
+namespace RFramework
 {
     /// <summary>
     /// 实体实例对象，包装一个实例化的实体及其原始资源引用。
@@ -32,7 +32,7 @@ namespace RFramework.Entity
         /// </summary>
         private readonly IEntityHelper entityHelper;
 
-        private readonly RFramework.Resource.IResourceModule resourceModule;
+        private readonly RFramework.IResourceModule resourceModule;
 
         private bool released;
 
@@ -44,7 +44,7 @@ namespace RFramework.Entity
         /// <param name="target">实例化后的对象。</param>
         /// <param name="entityHelper">实体辅助器。</param>
         public EntityInstanceObject(string assetName, object entityAsset, object target, IEntityHelper entityHelper,
-            RFramework.Resource.IResourceModule resourceModule)
+            RFramework.IResourceModule resourceModule)
         {
             AssetName = assetName;
             EntityAsset = entityAsset;

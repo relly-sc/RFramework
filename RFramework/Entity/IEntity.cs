@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace RFramework.Entity
+namespace RFramework
 {
     /// <summary>
     /// 实体接口，描述一个游戏实体的完整生命周期和状态。

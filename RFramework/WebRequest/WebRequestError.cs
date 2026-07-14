@@ -1,4 +1,4 @@
-namespace RFramework.WebRequest
+namespace RFramework
 {
     /// <summary>
     /// 请求错误分类枚举。

@@ -1,4 +1,4 @@
-namespace RFramework.Entity
+namespace RFramework
 {
     /// <summary>
     /// 实体辅助器接口，封装所有引擎特定的实体操作。

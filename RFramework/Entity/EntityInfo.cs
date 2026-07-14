@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace RFramework.Entity
+namespace RFramework
 {
     /// <summary>
     /// 实体信息，记录实体的运行时状态、父子关系等元数据。
