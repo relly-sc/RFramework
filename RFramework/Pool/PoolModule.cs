@@ -39,14 +39,16 @@ namespace RFramework.Pool
         /// </summary>
         internal override void Shutdown()
         {
+            List<IObjectPoolBase> poolsToClear;
             lock (pools)
             {
-                foreach (KeyValuePair<string, IObjectPoolBase> kvp in pools)
-                {
-                    kvp.Value.Clear();
-                }
-
+                poolsToClear = new List<IObjectPoolBase>(pools.Values);
                 pools.Clear();
+            }
+
+            for (int i = 0; i < poolsToClear.Count; i++)
+            {
+                poolsToClear[i].Clear();
             }
         }
 
@@ -55,7 +57,13 @@ namespace RFramework.Pool
         /// </summary>
         public int PoolCount
         {
-            get { return pools.Count; }
+            get
+            {
+                lock (pools)
+                {
+                    return pools.Count;
+                }
+            }
         }
 
         /// <summary>
@@ -107,17 +115,25 @@ namespace RFramework.Pool
                 throw new RFrameworkException("Object pool name is invalid.");
             }
 
+            IObjectPoolBase poolToClear = null;
             lock (pools)
             {
                 if (pools.TryGetValue(name, out IObjectPoolBase pool))
                 {
-                    pool.Clear();
                     pools.Remove(name);
-                    return true;
+                    poolToClear = pool;
                 }
             }
 
-            return false;
+            if (poolToClear == null)
+            {
+                return false;
+            }
+
+            // Invoke pool callbacks after releasing the registry lock. They
+            // are user code and may create or destroy other pools.
+            poolToClear.Clear();
+            return true;
         }
 
         /// <summary>
@@ -146,12 +162,15 @@ namespace RFramework.Pool
         /// </summary>
         public void ReleaseAllUnused()
         {
+            List<IObjectPoolBase> poolsToRelease;
             lock (pools)
             {
-                foreach (KeyValuePair<string, IObjectPoolBase> kvp in pools)
-                {
-                    kvp.Value.ReleaseUnused();
-                }
+                poolsToRelease = new List<IObjectPoolBase>(pools.Values);
+            }
+
+            for (int i = 0; i < poolsToRelease.Count; i++)
+            {
+                poolsToRelease[i].ReleaseUnused();
             }
         }
     }

@@ -209,7 +209,7 @@ namespace RFramework.Audio
         /// <inheritdoc/>
         public void StopAllSfx()
         {
-            audioHelper.StopAllSfx();
+            audioHelper?.StopAllSfx();
         }
 
         // ====== UI ======
@@ -234,6 +234,14 @@ namespace RFramework.Audio
         /// <inheritdoc/>
         public void StopAll()
         {
+            if (audioHelper == null)
+            {
+                currentBgmAssetName = null;
+                bgmPaused = false;
+                bgmHandleId = 0;
+                return;
+            }
+
             StopBgmInternal();
             audioHelper.StopAllSfx();
         }
@@ -253,7 +261,7 @@ namespace RFramework.Audio
             }
             else
             {
-                audioHelper.StopSfx(handleId);
+                audioHelper?.StopSfx(handleId);
             }
         }
 

@@ -265,10 +265,17 @@ namespace RFramework.Entity
         /// <param name="realElapseSeconds">实际流逝时间。</param>
         public void Update(float elapseSeconds, float realElapseSeconds)
         {
-            for (int i = 0; i < entities.Count; i++)
+            for (int i = 0; i < entities.Count;)
             {
                 cachedEntityIndex = i;
-                entities[i].OnUpdate(elapseSeconds, realElapseSeconds);
+                IEntity entity = entities[i];
+                entity.OnUpdate(elapseSeconds, realElapseSeconds);
+
+                // OnUpdate may hide/remove the current entity. Advance from
+                // the entity's current position so the element shifted into
+                // this slot is still updated this frame.
+                int currentIndex = entities.IndexOf(entity);
+                i = currentIndex >= 0 ? currentIndex + 1 : i;
             }
 
             cachedEntityIndex = -1;

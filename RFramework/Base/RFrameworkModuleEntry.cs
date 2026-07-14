@@ -63,14 +63,19 @@ namespace RFramework
             frameworkModules.Clear();
             Utility.Marshal.FreeCachedHGlobal();
 
-            // 聚合异常必须在 SetLogHelper(null) 之前抛出，
-            // 确保 BaseComponent.OnDestroy 经 Log 输出时日志辅助器仍有效
-            if (errors != null)
+            try
             {
-                ThrowAggregatedErrors("shutdown", errors);
+                if (errors != null)
+                {
+                    ThrowAggregatedErrors("shutdown", errors);
+                }
             }
-
-            RFrameworkLog.SetLogHelper(null);
+            finally
+            {
+                // Static helpers must not retain a destroyed Runtime logger
+                // when one module failed during shutdown.
+                RFrameworkLog.SetLogHelper(null);
+            }
         }
 
         /// <summary>

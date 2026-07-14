@@ -29,6 +29,10 @@ namespace RFramework.Scene
         /// </summary>
         private readonly List<string> unloadingSceneNames = new List<string>();
 
+        // A Unity Single load replaces the active scene set and must not race
+        // any other load or unload operation managed by this module.
+        private bool isSingleSceneTransitionInProgress;
+
         /// <summary>
         /// 资源模块引用，用于场景加载/卸载。
         /// </summary>
@@ -121,8 +125,18 @@ namespace RFramework.Scene
                 throw new RFrameworkException($"Scene '{assetName}' is unloading.");
             }
 
+            if (isSingleSceneTransitionInProgress ||
+                (sceneMode == 0 && (loadingSceneNames.Count > 0 || unloadingSceneNames.Count > 0)))
+            {
+                throw new RFrameworkException("A scene transition is already in progress.");
+            }
+
             double startTimestamp = DateTime.UtcNow.Ticks;
             loadingSceneNames.Add(assetName);
+            if (sceneMode == 0)
+            {
+                isSingleSceneTransitionInProgress = true;
+            }
 
             try
             {
@@ -151,10 +165,19 @@ namespace RFramework.Scene
                 {
                     eventModule.Fire(new LoadSceneSuccessEvent(assetName, duration, userData));
                 }
+
+                if (sceneMode == 0)
+                {
+                    isSingleSceneTransitionInProgress = false;
+                }
             }
             catch (Exception ex)
             {
                 loadingSceneNames.Remove(assetName);
+                if (sceneMode == 0)
+                {
+                    isSingleSceneTransitionInProgress = false;
+                }
 
                 // 分发失败事件
                 if (eventModule != null)
@@ -181,6 +204,11 @@ namespace RFramework.Scene
             if (resourceModule == null)
             {
                 throw new RFrameworkException("Resource module is not set.");
+            }
+
+            if (isSingleSceneTransitionInProgress)
+            {
+                throw new RFrameworkException("A Single scene transition is in progress.");
             }
 
             if (unloadingSceneNames.Contains(assetName))
@@ -341,6 +369,7 @@ namespace RFramework.Scene
             loadingSceneNames.Clear();
             unloadingSceneNames.Clear();
             CurrentSceneName = null;
+            isSingleSceneTransitionInProgress = false;
         }
     }
 }

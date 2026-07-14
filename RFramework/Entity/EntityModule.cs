@@ -290,7 +290,7 @@ namespace RFramework.Entity
                 {
                     entitiesToReleaseOnLoad.Remove(entityId);
                     entitiesBeingLoaded.Remove(entityId);
-                    resourceModule.UnloadAsset(entityAsset);
+                    resourceModule.UnloadAsset<object>(assetName);
                     entityAsset = null;
                     throw new OperationCanceledException(
                         $"Entity '{entityId}' loading was cancelled or module is shutting down.");
@@ -321,7 +321,7 @@ namespace RFramework.Entity
                 }
                 else if (entityAsset != null)
                 {
-                    resourceModule.UnloadAsset(entityAsset);
+                    resourceModule.UnloadAsset<object>(assetName);
                 }
 
                 // 分发失败事件
@@ -387,7 +387,6 @@ namespace RFramework.Entity
             if (IsLoadingEntity(entityId))
             {
                 entitiesToReleaseOnLoad.Add(entityId);
-                entitiesBeingLoaded.Remove(entityId);
                 return;
             }
 

@@ -270,6 +270,14 @@ namespace RFramework.UI
         /// </summary>
         public void CloseAllUIForms(object userData = null)
         {
+            // Keep loading entries until their continuations observe this
+            // marker. Clearing the set would allow a late load to reopen UI
+            // after this bulk-close operation has completed.
+            foreach (string assetName in loadingUIForms)
+            {
+                abortedUIForms.Add(assetName);
+            }
+
             // 倒序关闭（从栈顶开始）
             for (int i = windowStack.Count - 1; i >= 0; i--)
             {
@@ -287,7 +295,6 @@ namespace RFramework.UI
             windowStack.Clear();
             uiForms.Clear();
             uiAssets.Clear();
-            loadingUIForms.Clear();
         }
 
         /// <summary>

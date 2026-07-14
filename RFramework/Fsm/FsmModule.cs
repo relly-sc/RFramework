@@ -123,12 +123,18 @@ namespace RFramework.Fsm
         /// </summary>
         internal override void Shutdown()
         {
+            HashSet<FsmBase> allFsms = new HashSet<FsmBase>(fsms);
+            for (int i = 0; i < toAdd.Count; i++)
+            {
+                allFsms.Add(toAdd[i]);
+            }
+
             toAdd.Clear();
             toRemove.Clear();
 
-            for (int i = fsms.Count - 1; i >= 0; i--)
+            foreach (FsmBase fsm in allFsms)
             {
-                fsms[i].Shutdown();
+                fsm.Shutdown();
             }
 
             fsms.Clear();
