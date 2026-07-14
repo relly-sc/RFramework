@@ -75,6 +75,12 @@ namespace RFramework.Fsm
         private bool isDestroyed;
 
         /// <summary>
+        /// 是否正处于状态切换中（OnLeave/OnEnter 执行期间）。
+        /// 用于防止状态生命周期方法内嵌套调用 ChangeState/Start 导致的重入递归。
+        /// </summary>
+        private bool isTransitioning;
+
+        /// <summary>
         /// 初始化有限状态机的新实例。
         /// </summary>
         /// <param name="owner">状态机拥有者。</param>
@@ -164,11 +170,24 @@ namespace RFramework.Fsm
                 throw new RFrameworkException("Fsm is already started.");
             }
 
+            if (isTransitioning)
+            {
+                throw new RFrameworkException("Fsm is in transition, reentrant Start is not allowed.");
+            }
+
             Type stateType = typeof(TState);
             IFsmState state = GetStateInternal(stateType);
             currentState = state;
             currentStateTime = 0f;
-            state.OnEnter();
+            isTransitioning = true;
+            try
+            {
+                state.OnEnter();
+            }
+            finally
+            {
+                isTransitioning = false;
+            }
         }
 
         /// <inheritdoc/>
@@ -177,6 +196,11 @@ namespace RFramework.Fsm
             if (isDestroyed)
             {
                 throw new RFrameworkException("Fsm is destroyed.");
+            }
+
+            if (isTransitioning)
+            {
+                throw new RFrameworkException("Fsm is in transition, reentrant ChangeState is not allowed.");
             }
 
             Type stateType = typeof(TState);
@@ -192,15 +216,23 @@ namespace RFramework.Fsm
                 return;
             }
 
-            // 离开当前状态
-            if (currentState != null)
+            isTransitioning = true;
+            try
             {
-                currentState.OnLeave(false);
-            }
+                // 离开当前状态
+                if (currentState != null)
+                {
+                    currentState.OnLeave(false);
+                }
 
-            currentState = targetState;
-            currentStateTime = 0f;
-            targetState.OnEnter();
+                currentState = targetState;
+                currentStateTime = 0f;
+                targetState.OnEnter();
+            }
+            finally
+            {
+                isTransitioning = false;
+            }
         }
 
         /// <inheritdoc/>
@@ -237,19 +269,52 @@ namespace RFramework.Fsm
                 return;
             }
 
-            if (currentState != null)
+            List<Exception> errors = null;
+
+            // 离开当前状态：包裹 isTransitioning 守卫，与 Start/ChangeState 保持一致，
+            // 既防止重入，也确保异常不会跳过 finally 复位而中止后续清理。
+            isTransitioning = true;
+            try
             {
-                currentState.OnLeave(true);
+                if (currentState != null)
+                {
+                    currentState.OnLeave(true);
+                }
+            }
+            catch (Exception ex)
+            {
+                (errors ?? (errors = new List<Exception>())).Add(ex);
+            }
+            finally
+            {
+                isTransitioning = false;
             }
 
+            // 销毁所有状态：单个状态异常不应中止其余状态的清理（尽力清理）
             foreach (KeyValuePair<Type, IFsmState> kvp in states)
             {
-                kvp.Value.OnDestroy();
+                try
+                {
+                    kvp.Value.OnDestroy();
+                }
+                catch (Exception ex)
+                {
+                    (errors ?? (errors = new List<Exception>())).Add(ex);
+                }
             }
 
             states.Clear();
             currentState = null;
             isDestroyed = true;
+
+            // 收集到异常时抛出内联根因（保留首个原始异常作为 inner），
+            // 便于上层模块级异常聚合保留真实堆栈。
+            if (errors != null)
+            {
+                Exception first = errors[0];
+                throw new RFrameworkException(
+                    Utility.Text.Format("Fsm shutdown encountered {0} state error(s).", errors.Count), first);
+            }
         }
 
         /// <summary>

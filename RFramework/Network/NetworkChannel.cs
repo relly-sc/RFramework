@@ -39,6 +39,11 @@ namespace RFramework.Network
         private bool isConnected;
 
         /// <summary>
+        /// 是否正在连接中（防止并发重入连接覆盖回调）。
+        /// </summary>
+        private bool isConnecting;
+
+        /// <summary>
         /// 是否正在尝试重连（防止重复重连）。
         /// </summary>
         private bool isReconnecting;
@@ -172,18 +177,34 @@ namespace RFramework.Network
                 return Task.CompletedTask;
             }
 
+            if (isConnecting)
+            {
+                return Task.FromException(new RFrameworkException(
+                    string.Format("Channel '{0}' is already connecting.", Name)));
+            }
+
             CurrentIP = ip;
             CurrentPort = port;
             disposed = false;
+            isConnecting = true;
 
             TaskCompletionSource<bool> tcs = new TaskCompletionSource<bool>();
+
+            // 取消令牌触发时：真正废弃底层连接（而非仅取消 Task），并标记连接终止
+            CancellationTokenRegistration cancelReg = ct.Register(() =>
+            {
+                AbortConnectAttempt();
+                tcs.TrySetCanceled();
+            });
 
             // 连接成功（统一马歇尔到主线程执行，避免跨线程触碰 Event/Timer）
             networkHelper.OnConnected = () =>
             {
                 callbackQueue.Enqueue(() =>
                 {
+                    isConnecting = false;
                     isConnected = true;
+                    cancelReg.Dispose();
                     StartHeartbeat();
                     eventModule?.Fire(new NetworkConnectedEvent(Name));
                     tcs.TrySetResult(true);
@@ -197,6 +218,8 @@ namespace RFramework.Network
                 {
                     if (!isConnected)
                     {
+                        isConnecting = false;
+                        cancelReg.Dispose();
                         tcs.TrySetException(new RFrameworkException(
                             string.Format("Failed to connect to {0}:{1} [{2}].", ip, port, Name)));
                         return;
@@ -213,6 +236,8 @@ namespace RFramework.Network
                 {
                     if (!isConnected)
                     {
+                        isConnecting = false;
+                        cancelReg.Dispose();
                         tcs.TrySetException(new RFrameworkException(string.Format("Connect error [{0}]: {1}", Name, msg)));
                     }
                     else
@@ -222,14 +247,14 @@ namespace RFramework.Network
                 });
             };
 
-            ct.Register(() => tcs.TrySetCanceled());
-
             try
             {
                 networkHelper.Connect(ip, port);
             }
             catch (Exception ex)
             {
+                isConnecting = false;
+                cancelReg.Dispose();
                 tcs.TrySetException(new RFrameworkException(
                     string.Format("Connect exception [{0}]: {1}", Name, ex.Message)));
             }
@@ -245,11 +270,28 @@ namespace RFramework.Network
             CancelReconnect();
             isReconnecting = false;
 
-            if (networkHelper != null && isConnected)
+            if (networkHelper != null && (isConnected || isConnecting))
             {
                 networkHelper.Disconnect();
             }
 
+            isConnected = false;
+            isConnecting = false;
+        }
+
+        /// <summary>
+        /// 中止"连接中"状态。连接尚未建立（isConnected==false）时，若仅依赖
+        /// <see cref="Disconnect"/> 的 isConnected 守卫会跳过底层 socket 断开，
+        /// 导致取消无法终止正在进行的连接尝试。此处无条件废弃底层连接。
+        /// </summary>
+        private void AbortConnectAttempt()
+        {
+            isConnecting = false;
+            disposed = true;
+            StopHeartbeat();
+            CancelReconnect();
+            isReconnecting = false;
+            networkHelper?.Disconnect();
             isConnected = false;
         }
 

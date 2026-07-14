@@ -273,13 +273,15 @@ namespace RFramework.Entity
                 // 通过 IResourceModule 加载 Prefab 资源
                 object entityAsset = await resourceModule.LoadAssetAsync<object>(assetName, priority, ct);
 
-                // 检查是否在加载期间被取消
-                if (entitiesToReleaseOnLoad.Contains(entityId))
+                // 加载完成后检查取消 / 模块关闭 / 手动隐藏标记，
+                // 避免迟到的加载在已关闭（或正在关闭）的模块中复活实体
+                if (ct.IsCancellationRequested || isShutdown || entitiesToReleaseOnLoad.Contains(entityId))
                 {
                     entitiesToReleaseOnLoad.Remove(entityId);
                     entitiesBeingLoaded.Remove(entityId);
                     entityHelper.ReleaseEntity(entityAsset, null);
-                    throw new OperationCanceledException($"Entity '{entityId}' loading was cancelled.");
+                    throw new OperationCanceledException(
+                        $"Entity '{entityId}' loading was cancelled or module is shutting down.");
                 }
 
                 entitiesBeingLoaded.Remove(entityId);
@@ -749,7 +751,8 @@ namespace RFramework.Entity
             entitiesToReleaseOnLoad.Clear();
             recycleQueue.Clear();
             activeInstanceObjects.Clear();
-            isShutdown = false;
+            // 注意：isShutdown 保持为 true，使关闭后迟到的加载能检测到模块已关闭而取消，
+            // 避免在已销毁的模块中复活实体。
         }
 
         /// <summary>

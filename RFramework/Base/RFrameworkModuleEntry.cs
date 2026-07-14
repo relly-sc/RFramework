@@ -1,6 +1,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Text;
 
 namespace RFramework
 {
@@ -19,9 +20,23 @@ namespace RFramework
         /// <param name="realElapseSeconds">真实流逝时间，以秒为单位。</param>
         public static void Update(float elapseSeconds, float realElapseSeconds)
         {
+            // 逐模块隔离：单个模块 Update 抛异常不影响其余模块继续轮询；收集后统一上报
+            List<Exception> errors = null;
             for (LinkedListNode<RFrameworkModule> node = frameworkModules.Last; node != null; node = node.Previous)
             {
-                node.Value.Update(elapseSeconds, realElapseSeconds);
+                try
+                {
+                    node.Value.Update(elapseSeconds, realElapseSeconds);
+                }
+                catch (Exception ex)
+                {
+                    (errors ??= new List<Exception>()).Add(ex);
+                }
+            }
+
+            if (errors != null)
+            {
+                ThrowAggregatedErrors("update", errors);
             }
         }
 
@@ -31,14 +46,51 @@ namespace RFramework
         /// </summary>
         public static void Shutdown()
         {
+            List<Exception> errors = null;
             for (LinkedListNode<RFrameworkModule> node = frameworkModules.First; node != null; node = node.Next)
             {
-                node.Value.Shutdown();
+                try
+                {
+                    node.Value.Shutdown();
+                }
+                catch (Exception ex)
+                {
+                    // 单个模块关闭异常不影响其余模块继续释放；收集后统一上报
+                    (errors ??= new List<Exception>()).Add(ex);
+                }
             }
 
             frameworkModules.Clear();
             Utility.Marshal.FreeCachedHGlobal();
+
+            // 聚合异常必须在 SetLogHelper(null) 之前抛出，
+            // 确保 BaseComponent.OnDestroy 经 Log 输出时日志辅助器仍有效
+            if (errors != null)
+            {
+                ThrowAggregatedErrors("shutdown", errors);
+            }
+
             RFrameworkLog.SetLogHelper(null);
+        }
+
+        /// <summary>
+        /// 将多个模块异常聚合并内联各自的完整文本（含堆栈），便于上层定位根因。
+        /// 首个异常作为包装异常的根因（inner）传出，避免丢失原始异常信息。
+        /// </summary>
+        /// <param name="phase">发生阶段（"update" 或 "shutdown"）。</param>
+        /// <param name="errors">收集到的模块异常列表。</param>
+        private static void ThrowAggregatedErrors(string phase, List<Exception> errors)
+        {
+            StringBuilder sb = new StringBuilder();
+            sb.Append(Utility.Text.Format(
+                "Framework {0} encountered {1} module error(s):{2}", phase, errors.Count, Environment.NewLine));
+            for (int i = 0; i < errors.Count; i++)
+            {
+                sb.Append(Utility.Text.Format(
+                    "[Error {0}] {1}{2}", i + 1, errors[i].ToString(), Environment.NewLine));
+            }
+
+            throw new RFrameworkException(sb.ToString(), errors[0]);
         }
 
         /// <summary>

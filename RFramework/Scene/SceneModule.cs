@@ -328,17 +328,10 @@ namespace RFramework.Scene
         /// </summary>
         internal override void Shutdown()
         {
-            // 卸载所有已加载场景（无顺序依赖）
-            string[] names = loadedSceneNames.ToArray();
-            for (int i = 0; i < names.Length; i++)
-            {
-                if (!unloadingSceneNames.Contains(names[i]))
-                {
-                    // 注意：Shutdown 中不能 await，触发异步卸载即可
-                    _ = resourceModule.UnloadSceneAsync(names[i]);
-                }
-            }
-
+            // 关闭阶段跳过异步卸载：本模块优先级(15)低于 Resource(20)，
+            // 若在此 fire-and-forget 触发卸载，会与 ResourceModule 的 Shutdown/资源销毁
+            // 形成并发竞态，且底层辅助器可能在卸载完成前即被销毁导致异常被吞。
+            // 因此仅清理场景簿记，底层场景句柄由 ResourceModule.Destroy 统一回收。
             loadedSceneNames.Clear();
             loadingSceneNames.Clear();
             unloadingSceneNames.Clear();

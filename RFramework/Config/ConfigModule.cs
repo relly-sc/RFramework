@@ -69,6 +69,11 @@ namespace RFramework.Config
                 throw new RFrameworkException(errorMsg);
             }
 
+            // 旧表引用与旧行数（重复加载时需在覆盖前捕获，失败回滚用）
+            bool hasOld = configTables.TryGetValue(rowType, out object oldTable);
+            int oldRowCount = hasOld ? configRowCounts[rowType] : 0;
+            object newTable = null;
+
             try
             {
                 // 1. 映射行类型 → 表类型（如 ItemConfig → TbItem）
@@ -76,8 +81,9 @@ namespace RFramework.Config
 
                 // 2. 解析字节为表对象
                 object parsedTable = helper.ParseConfig(tableType, configBytes);
+                newTable = parsedTable;
 
-                // 3. 缓存
+                // 3. 缓存（覆盖旧表）
                 configTables[rowType] = parsedTable;
 
                 // 4. 记录行数（用于事件分发）
@@ -94,17 +100,39 @@ namespace RFramework.Config
 
                 configRowCounts[rowType] = rowCount;
 
-                // 5. 分发成功事件
+                // 5. 分发成功事件（暂不释放旧表，待确认新表已安全写入并广播后再释放）
                 FireLoadSuccessEvent(rowType, rowCount);
             }
             catch (Exception ex)
             {
-                // 清理可能的脏数据
-                configTables.Remove(rowType);
-                configRowCounts.Remove(rowType);
+                // 失败回滚：恢复旧表（无旧表则移除条目），保证旧表始终可访问且不被泄漏；
+                // 同时释放已创建但加载失败的新表。
+                if (hasOld)
+                {
+                    configTables[rowType] = oldTable;
+                    configRowCounts[rowType] = oldRowCount;
+                }
+                else
+                {
+                    configTables.Remove(rowType);
+                    configRowCounts.Remove(rowType);
+                }
+
+                if (newTable != null && newTable != oldTable)
+                {
+                    try { helper.ReleaseConfig(newTable); }
+                    catch { /* best-effort */ }
+                }
 
                 FireLoadFailedEvent(rowType, ex.Message);
                 throw;
+            }
+
+            // 新表已安全写入并广播，现在释放被覆盖的旧表（best-effort）
+            if (hasOld && oldTable != newTable)
+            {
+                try { helper.ReleaseConfig(oldTable); }
+                catch { /* best-effort */ }
             }
         }
 
@@ -130,10 +158,16 @@ namespace RFramework.Config
                 throw new RFrameworkException(errorMsg);
             }
 
+            // 旧表引用与旧行数（重复加载时需在覆盖前捕获，失败回滚用）
+            bool hasOld = configTables.TryGetValue(rowType, out object oldTable);
+            int oldRowCount = hasOld ? configRowCounts[rowType] : 0;
+            object newTable = null;
+
             try
             {
                 Type tableType = helper.GetTableType(rowType);
                 object parsedTable = helper.ParseConfigFromString(tableType, json);
+                newTable = parsedTable;
                 configTables[rowType] = parsedTable;
 
                 int rowCount = 0;
@@ -151,10 +185,34 @@ namespace RFramework.Config
             }
             catch (Exception ex)
             {
-                configTables.Remove(rowType);
-                configRowCounts.Remove(rowType);
+                // 失败回滚：恢复旧表（无旧表则移除条目），保证旧表始终可访问且不被泄漏；
+                // 同时释放已创建但加载失败的新表。
+                if (hasOld)
+                {
+                    configTables[rowType] = oldTable;
+                    configRowCounts[rowType] = oldRowCount;
+                }
+                else
+                {
+                    configTables.Remove(rowType);
+                    configRowCounts.Remove(rowType);
+                }
+
+                if (newTable != null && newTable != oldTable)
+                {
+                    try { helper.ReleaseConfig(newTable); }
+                    catch { /* best-effort */ }
+                }
+
                 FireLoadFailedEvent(rowType, ex.Message);
                 throw;
+            }
+
+            // 新表已安全写入并广播，现在释放被覆盖的旧表（best-effort）
+            if (hasOld && oldTable != newTable)
+            {
+                try { helper.ReleaseConfig(oldTable); }
+                catch { /* best-effort */ }
             }
         }
 

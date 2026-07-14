@@ -35,6 +35,12 @@ namespace RFramework.WebRequest
         private SemaphoreSlim semaphore;
 
         /// <summary>
+        /// 已退役的信号量集合。SetMaxConcurrentRequests 重建时旧实例不立即 Dispose
+        /// （避免释放仍在被在途请求使用的实例），延后至 Shutdown 统一释放。
+        /// </summary>
+        private readonly List<SemaphoreSlim> retiredSemaphores = new List<SemaphoreSlim>();
+
+        /// <summary>
         /// 最大并发请求数缓存（用于 SetMaxConcurrentRequests 时重建信号量）。
         /// </summary>
         private int maxConcurrentRequests;
@@ -49,6 +55,11 @@ namespace RFramework.WebRequest
         /// 默认重试次数，由 SetDefaultRetries 注入。
         /// </summary>
         private int maxRetries;
+
+        /// <summary>
+        /// 重试退避时间（毫秒），每次重试前等待以避免紧密重试压垮服务端。
+        /// </summary>
+        private const int RetryBackoffMilliseconds = 200;
 
         // ====== 活跃请求追踪（用于 Tag 管理） ======
 
@@ -105,10 +116,15 @@ namespace RFramework.WebRequest
             maxConcurrentRequests = max;
 
             // max <= 0 表示无限制：不创建信号量，SendCore 跳过 Wait/Release（避免 SemaphoreSlim(0,0) 死锁）
-            // 仅在框架初始化阶段调用本方法：此时无在途请求，可安全释放旧信号量
             SemaphoreSlim old = semaphore;
             semaphore = max <= 0 ? null : new SemaphoreSlim(max, max);
-            old?.Dispose();
+
+            // 不在调用中途 Dispose 旧信号量：若有在途请求正等待旧实例，
+            // Dispose 会使其 Release 抛 ObjectDisposedException。旧实例延后至 Shutdown 统一释放。
+            if (old != null)
+            {
+                retiredSemaphores.Add(old);
+            }
         }
 
         /// <inheritdoc/>
@@ -542,6 +558,8 @@ namespace RFramework.WebRequest
                     // 判断是否需要重试
                     if (lastResponse != null && ShouldRetry(lastResponse.Error, lastResponse.StatusCode, ref remainingRetries))
                     {
+                        // 重试前退避，避免紧密重试压垮服务端
+                        await Task.Delay(RetryBackoffMilliseconds, linkedCts.Token);
                         continue;
                     }
 
@@ -800,13 +818,28 @@ namespace RFramework.WebRequest
 
             try
             {
-                semaphore.Dispose();
+                semaphore?.Dispose();
             }
             catch
             {
                 // 忽略
             }
 
+            // 释放所有已退役（被 SetMaxConcurrentRequests 替换的）旧信号量
+            for (int i = 0; i < retiredSemaphores.Count; i++)
+            {
+                try
+                {
+                    retiredSemaphores[i].Dispose();
+                }
+                catch
+                {
+                    // 忽略
+                }
+            }
+
+            retiredSemaphores.Clear();
+            semaphore = null;
             helper = null;
         }
 

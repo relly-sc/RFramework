@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace RFramework.Pool
 {
@@ -194,8 +195,9 @@ namespace RFramework.Pool
         /// </summary>
         public void Clear()
         {
-            // 先销毁活跃对象
-            foreach (T obj in active)
+            // 先销毁活跃对象（快照遍历，避免 DestroyObject 回调反向修改 active 集合导致 InvalidOperationException）
+            T[] activeSnapshot = active.ToArray();
+            foreach (T obj in activeSnapshot)
             {
                 DestroyObject(obj);
             }

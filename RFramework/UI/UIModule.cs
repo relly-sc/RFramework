@@ -53,6 +53,17 @@ namespace RFramework.UI
         private readonly HashSet<string> loadingUIForms = new HashSet<string>();
 
         /// <summary>
+        /// 正在关闭（加载中被取消）的 UI 资源路径集合。
+        /// CloseUIForm 在 UI 仍加载时记录，OpenUIFormAsync 加载完成后据此放弃打开。
+        /// </summary>
+        private readonly HashSet<string> abortedUIForms = new HashSet<string>();
+
+        /// <summary>
+        /// 模块是否已关闭。关闭后加载完成的 UI 不再打开。
+        /// </summary>
+        private bool isShutdown;
+
+        /// <summary>
         /// 获取框架模块优先级。
         /// UIModule Priority=30，在 Entity(25) 之后。
         /// </summary>
@@ -129,6 +140,14 @@ namespace RFramework.UI
 
                 loadingUIForms.Remove(assetName);
 
+                // 加载完成后再次校验：取消令牌触发 / 模块已关闭 / 加载期间被 CloseUIForm 取消。
+                // 任一成立则放弃打开，并释放已加载但未使用的资源引用计数，避免泄漏。
+                if (ct.IsCancellationRequested || isShutdown || abortedUIForms.Remove(assetName))
+                {
+                    resourceModule.UnloadAsset(uiAsset);
+                    throw new OperationCanceledException();
+                }
+
                 // 实例化 UI 对象
                 object uiInstance = uiHelper.InstantiateUI(uiAsset);
                 IUIForm uiForm = uiHelper.CreateUIForm(uiInstance, assetName, windowLayer, fullScreen);
@@ -157,8 +176,10 @@ namespace RFramework.UI
             catch (Exception ex)
             {
                 loadingUIForms.Remove(assetName);
+                abortedUIForms.Remove(assetName);
 
-                if (eventModule != null)
+                // 取消（含加载中关闭）属正常流程，不视为失败事件
+                if (!(ex is OperationCanceledException) && eventModule != null)
                 {
                     eventModule.Fire(new OpenUIFormFailureEvent(assetName, ex.Message, userData));
                 }
@@ -172,6 +193,13 @@ namespace RFramework.UI
         /// </summary>
         public void CloseUIForm(string assetName, object userData = null)
         {
+            // 若 UI 仍在加载中：标记取消，待加载完成后由 OpenUIFormAsync 放弃打开
+            if (loadingUIForms.Contains(assetName))
+            {
+                abortedUIForms.Add(assetName);
+                return;
+            }
+
             if (!uiForms.TryGetValue(assetName, out IUIForm uiForm))
             {
                 return;
@@ -346,10 +374,12 @@ namespace RFramework.UI
         /// </summary>
         internal override void Shutdown()
         {
+            isShutdown = true;
             CloseAllUIForms();
             windowStack.Clear();
             uiForms.Clear();
             loadingUIForms.Clear();
+            abortedUIForms.Clear();
         }
     }
 }

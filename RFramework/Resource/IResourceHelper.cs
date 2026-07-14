@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace RFramework.Resource
@@ -33,8 +34,9 @@ namespace RFramework.Resource
         /// <param name="location">资源路径（如 "Assets/Prefabs/Player.prefab"）</param>
         /// <param name="assetType">资源类型</param>
         /// <param name="priority">加载优先级（越大越优先）</param>
+        /// <param name="ct">取消令牌，调用方已取消时应尽早中止底层加载</param>
         /// <returns>加载的资源对象</returns>
-        Task<object> LoadAssetAsync(string location, Type assetType, uint priority);
+        Task<object> LoadAssetAsync(string location, Type assetType, uint priority, CancellationToken ct = default);
 
         /// <summary>
         /// 同步加载资源并返回原始对象。

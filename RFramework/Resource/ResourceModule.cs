@@ -48,14 +48,63 @@ namespace RFramework.Resource
         /// <summary>是否已完成初始化</summary>
         private bool isInitialized;
 
+        /// <summary>是否已进入关闭流程。置位后新加载请求直接失败，在飞加载续体不再写回缓存。</summary>
+        private bool isShutdown;
+
         // ==================== 资源缓存（引用计数） ====================
 
-        /// <summary>已加载资源缓存：location → CachedAsset</summary>
-        private readonly Dictionary<string, CachedAsset> loadedAssets = new Dictionary<string, CachedAsset>();
+        /// <summary>
+        /// 资源缓存键：规范化路径 + 资源类型。
+        /// 同一路径以不同泛型类型加载时视为不同资源（避免类型不匹配却返回 null 且引用计数仍 +1）；
+        /// 规范化路径使 "A" 与 "A.prefab" 映射到同一条缓存记录，避免重复缓存与重复释放。
+        /// </summary>
+        private readonly struct AssetCacheKey : IEquatable<AssetCacheKey>
+        {
+            /// <summary>规范化后的资源路径（已去扩展名）。</summary>
+            public readonly string Location;
 
-        /// <summary>正在加载中的资源并发去重：location → TCS 列表</summary>
-        private readonly Dictionary<string, List<TaskCompletionSource<CachedAsset>>> pendingLoads =
-            new Dictionary<string, List<TaskCompletionSource<CachedAsset>>>();
+            /// <summary>资源类型。</summary>
+            public readonly Type AssetType;
+
+            public AssetCacheKey(string location, Type assetType)
+            {
+                Location = location;
+                AssetType = assetType;
+            }
+
+            public bool Equals(AssetCacheKey other)
+            {
+                return string.Equals(Location, other.Location) && AssetType == other.AssetType;
+            }
+
+            public override bool Equals(object obj)
+            {
+                return obj is AssetCacheKey other && Equals(other);
+            }
+
+            public override int GetHashCode()
+            {
+                unchecked
+                {
+                    return ((Location != null ? Location.GetHashCode() : 0) * 397) ^
+                           (AssetType != null ? AssetType.GetHashCode() : 0);
+                }
+            }
+        }
+
+        /// <summary>已加载资源缓存：AssetCacheKey → CachedAsset</summary>
+        private readonly Dictionary<AssetCacheKey, CachedAsset> loadedAssets =
+            new Dictionary<AssetCacheKey, CachedAsset>();
+
+        /// <summary>正在加载中的资源并发去重：AssetCacheKey → TCS 列表</summary>
+        private readonly Dictionary<AssetCacheKey, List<TaskCompletionSource<CachedAsset>>> pendingLoads =
+            new Dictionary<AssetCacheKey, List<TaskCompletionSource<CachedAsset>>>();
+
+        /// <summary>保护 loadedAssets / pendingLoads 跨线程访问的锁（底层加载续体可能在线程池线程上执行）。</summary>
+        private readonly object loadLock = new object();
+
+        /// <summary>模块级取消令牌源。关闭时触发，使所有在飞底层加载（含等待中的 Task）随模块一起终止。</summary>
+        private readonly CancellationTokenSource moduleCts = new CancellationTokenSource();
 
         /// <summary>已加载的场景 location 集合</summary>
         private readonly HashSet<string> loadedScenes = new HashSet<string>();
@@ -186,47 +235,93 @@ namespace RFramework.Resource
                 throw new ArgumentNullException(nameof(location));
             }
 
-            // 1. 检查缓存命中
-            if (loadedAssets.TryGetValue(location, out CachedAsset cached))
+            // 调用方令牌已取消或模块已关闭：直接抛出取消，不再发起加载
+            if (ct.IsCancellationRequested || isShutdown)
             {
-                cached.RefCount++;
-                return cached.Asset as T;
+                throw new OperationCanceledException(ct.IsCancellationRequested ? ct : CancellationToken.None);
             }
 
-            // 2. 并发去重：如果同一资源正在加载中，等待已有加载完成
-            if (pendingLoads.TryGetValue(location, out List<TaskCompletionSource<CachedAsset>> tcsList))
+            string normalized = NormalizeLocation(location);
+            Type assetType = typeof(T);
+            AssetCacheKey key = new AssetCacheKey(normalized, assetType);
+
+            // 单锁原子决策：缓存命中 / 加入等待列表 / 登记为首个加载者，三者互斥，
+            // 避免双首调用竞态导致 pendingLoads 被覆盖。
+            TaskCompletionSource<CachedAsset> waitTcs = null;
+            List<TaskCompletionSource<CachedAsset>> newTcsList = null;
+
+            lock (loadLock)
             {
-                TaskCompletionSource<CachedAsset> waitTcs = new TaskCompletionSource<CachedAsset>();
-
-                // 注册取消回调：ct 被取消时自动取消等待 TCS
-                using (CancellationTokenRegistration ctr = ct.CanBeCanceled
-                    ? ct.Register(() => waitTcs.TrySetCanceled())
-                    : default)
+                if (loadedAssets.TryGetValue(key, out CachedAsset cached))
                 {
-                    tcsList.Add(waitTcs);
+                    cached.RefCount++;
+                    return cached.Asset as T;
+                }
 
+                if (pendingLoads.TryGetValue(key, out List<TaskCompletionSource<CachedAsset>> tcsList))
+                {
+                    waitTcs = new TaskCompletionSource<CachedAsset>();
+                    tcsList.Add(waitTcs);
+                }
+                else
+                {
+                    newTcsList = new List<TaskCompletionSource<CachedAsset>>();
+                    pendingLoads[key] = newTcsList;
+                }
+            }
+
+            // 等待者：仅操作本等待者 TCS，注册调用方与模块两层令牌，互不干扰共享加载
+            if (waitTcs != null)
+            {
+                using (ct.Register(() => waitTcs.TrySetCanceled()))
+                using (moduleCts.Token.Register(() => waitTcs.TrySetCanceled()))
+                {
                     try
                     {
                         CachedAsset result = await waitTcs.Task;
-                        result.RefCount++;
+                        lock (loadLock)
+                        {
+                            result.RefCount++;
+                        }
+
                         return result.Asset as T;
                     }
                     catch (OperationCanceledException)
                     {
-                        tcsList.Remove(waitTcs);
+                        // 调用方或模块关闭取消，直接重抛（不影响共享加载与引用计数）
                         throw;
                     }
                 }
             }
 
-            // 3. 新建加载任务
-            List<TaskCompletionSource<CachedAsset>> newTcsList =
-                new List<TaskCompletionSource<CachedAsset>>();
-            pendingLoads[location] = newTcsList;
+            // 首个加载者：合并调用方 ct 与模块关闭令牌，确保关闭/取消时底层真正终止
+            CancellationTokenSource linkedCts = null;
+            CancellationToken effectiveCt = ct;
+            if (ct != CancellationToken.None)
+            {
+                linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct, moduleCts.Token);
+                effectiveCt = linkedCts.Token;
+            }
+            else
+            {
+                effectiveCt = moduleCts.Token;
+            }
 
             try
             {
-                object asset = await helper.LoadAssetAsync(location, typeof(T), priority);
+                // 透传 effectiveCt：调用方或模块关闭取消时由底层在合适时机抛出
+                object asset = await helper.LoadAssetAsync(location, assetType, priority, effectiveCt);
+
+                // 底层加载完成后才发生取消/关闭：释放资源并抛取消，避免写回已清空的缓存（缓存"复活"）
+                if (isShutdown || ct.IsCancellationRequested || moduleCts.IsCancellationRequested)
+                {
+                    if (asset != null)
+                    {
+                        helper?.ReleaseAsset(location);
+                    }
+
+                    throw new OperationCanceledException();
+                }
 
                 if (asset != null)
                 {
@@ -234,51 +329,73 @@ namespace RFramework.Resource
                     {
                         Location = location,
                         Asset = asset,
-                        AssetType = typeof(T),
+                        AssetType = assetType,
                         RefCount = 1 // 初始引用计数为 1（当前调用者）
                     };
 
-                    loadedAssets[location] = newCached;
-
-                    // 通知所有等待者
-                    foreach (TaskCompletionSource<CachedAsset> tcs in newTcsList)
+                    lock (loadLock)
                     {
-                        tcs.TrySetResult(newCached);
+                        loadedAssets[key] = newCached;
+
+                        // 通知所有等待者（同一 location+type 的并发请求）
+                        foreach (TaskCompletionSource<CachedAsset> tcs in newTcsList)
+                        {
+                            tcs.TrySetResult(newCached);
+                        }
                     }
 
                     return newCached.Asset as T;
                 }
 
-                // 加载失败：分发事件通知 + 抛异常
+                // 加载返回 null：视为失败，分发事件并通知等待者（保留真实错误）
                 FireLoadFailedEvent<T>(location,
-                    $"LoadAssetAsync<{typeof(T).Name}> failed: {location}");
-
-                foreach (TaskCompletionSource<CachedAsset> tcs in newTcsList)
+                    $"LoadAssetAsync<{assetType.Name}> failed: {location}");
+                lock (loadLock)
                 {
-                    tcs.TrySetException(new RFrameworkException(
-                        $"LoadAssetAsync<{typeof(T).Name}> failed: {location}"));
+                    foreach (TaskCompletionSource<CachedAsset> tcs in newTcsList)
+                    {
+                        tcs.TrySetException(new RFrameworkException(
+                            $"LoadAssetAsync<{assetType.Name}> failed: {location}"));
+                    }
                 }
 
-                throw new RFrameworkException($"LoadAssetAsync<{typeof(T).Name}> failed: {location}");
+                throw new RFrameworkException($"LoadAssetAsync<{assetType.Name}> failed: {location}");
             }
             catch (Exception ex)
             {
-                // 分发失败事件（仅非取消异常；取消异常由 catch(OperationCanceledException) 处理）
-                if (!(ex is OperationCanceledException))
+                if (ex is OperationCanceledException)
                 {
-                    FireLoadFailedEvent<T>(location, ex.Message);
+                    // 取消：仅将等待者一并取消，不视为加载失败，不派发失败事件
+                    lock (loadLock)
+                    {
+                        foreach (TaskCompletionSource<CachedAsset> tcs in newTcsList)
+                        {
+                            tcs.TrySetCanceled();
+                        }
+                    }
                 }
-
-                foreach (TaskCompletionSource<CachedAsset> tcs in newTcsList)
+                else
                 {
-                    tcs.TrySetCanceled();
+                    // 真实错误：保留真实异常（不吞），等待者收到同样的异常而非“已取消”
+                    FireLoadFailedEvent<T>(location, ex.Message);
+                    lock (loadLock)
+                    {
+                        foreach (TaskCompletionSource<CachedAsset> tcs in newTcsList)
+                        {
+                            tcs.TrySetException(ex);
+                        }
+                    }
                 }
 
                 throw;
             }
             finally
             {
-                pendingLoads.Remove(location);
+                linkedCts?.Dispose();
+                lock (loadLock)
+                {
+                    pendingLoads.Remove(key);
+                }
             }
         }
 
@@ -298,11 +415,17 @@ namespace RFramework.Resource
                 throw new ArgumentNullException(nameof(location));
             }
 
-            // 检查缓存
-            if (loadedAssets.TryGetValue(location, out CachedAsset cached))
+            string normalized = NormalizeLocation(location);
+            AssetCacheKey key = new AssetCacheKey(normalized, typeof(T));
+
+            // 检查缓存（复合键含类型，天然校验类型）
+            lock (loadLock)
             {
-                cached.RefCount++;
-                return cached.Asset as T;
+                if (loadedAssets.TryGetValue(key, out CachedAsset cached))
+                {
+                    cached.RefCount++;
+                    return cached.Asset as T;
+                }
             }
 
             object asset = helper.LoadAssetSync(location, typeof(T));
@@ -322,7 +445,11 @@ namespace RFramework.Resource
                 RefCount = 1
             };
 
-            loadedAssets[location] = newCached;
+            lock (loadLock)
+            {
+                loadedAssets[key] = newCached;
+            }
+
             return newCached.Asset as T;
         }
 
@@ -385,7 +512,7 @@ namespace RFramework.Resource
             }
 
             // 查找对应的 CachedAsset
-            foreach (KeyValuePair<string, CachedAsset> kv in loadedAssets)
+            foreach (KeyValuePair<AssetCacheKey, CachedAsset> kv in loadedAssets)
             {
                 if (kv.Value.Asset == asset)
                 {
@@ -410,7 +537,7 @@ namespace RFramework.Resource
         {
             // 收集所有引用计数为 0 的资源
             List<CachedAsset> toRelease = new List<CachedAsset>();
-            foreach (KeyValuePair<string, CachedAsset> kv in loadedAssets)
+            foreach (KeyValuePair<AssetCacheKey, CachedAsset> kv in loadedAssets)
             {
                 if (kv.Value.CanRelease)
                 {
@@ -420,7 +547,7 @@ namespace RFramework.Resource
 
             foreach (CachedAsset asset in toRelease)
             {
-                loadedAssets.Remove(asset.Location);
+                loadedAssets.Remove(new AssetCacheKey(NormalizeLocation(asset.Location), asset.AssetType));
                 ReleaseCachedAsset(asset);
             }
 
@@ -445,7 +572,20 @@ namespace RFramework.Resource
         public bool HasAsset(string location)
         {
             EnsureInitialized();
-            return loadedAssets.ContainsKey(location) || helper.IsLocationValid(location);
+
+            string normalized = NormalizeLocation(location);
+            lock (loadLock)
+            {
+                foreach (KeyValuePair<AssetCacheKey, CachedAsset> kv in loadedAssets)
+                {
+                    if (kv.Key.Location == normalized)
+                    {
+                        return true;
+                    }
+                }
+            }
+
+            return helper.IsLocationValid(location);
         }
 
         /// <summary>
@@ -504,10 +644,15 @@ namespace RFramework.Resource
         /// </summary>
         internal override void Shutdown()
         {
+            // 先标记关闭并取消模块级令牌：令所有在飞加载（含底层资源加载续体）
+            // 立即感知取消，避免关闭后写入已清空的缓存表（缓存"复活"）。
+            isShutdown = true;
+            moduleCts.Cancel();
+
             // 释放所有缓存的资源句柄
-            foreach (KeyValuePair<string, CachedAsset> kv in loadedAssets)
+            foreach (KeyValuePair<AssetCacheKey, CachedAsset> kv in loadedAssets)
             {
-                helper?.ReleaseAsset(kv.Key);
+                helper?.ReleaseAsset(kv.Key.Location);
             }
 
             loadedAssets.Clear();
@@ -518,6 +663,8 @@ namespace RFramework.Resource
             // 销毁底层资源系统（释放所有场景句柄、移除资源包裹并销毁辅助器）。
             helper?.Destroy();
             isInitialized = false;
+
+            moduleCts.Dispose();
         }
 
         // ==================== 私有方法 ====================
@@ -546,6 +693,28 @@ namespace RFramework.Resource
         }
 
         /// <summary>
+        /// 规范化资源路径作为缓存键：去除扩展名，使 "A" 与 "A.prefab" 映射到同一条缓存记录。
+        /// 仅当最后一个点号位于路径分隔符之后时才去除（避免误伤带点的目录名）。
+        /// 纯 C# 实现，不依赖 Unity API；仅用于框架缓存键，不影响传给底层辅助器的原始路径。
+        /// </summary>
+        private static string NormalizeLocation(string location)
+        {
+            if (string.IsNullOrEmpty(location))
+            {
+                return location;
+            }
+
+            int dot = location.LastIndexOf('.');
+            int separator = Math.Max(location.LastIndexOf('/'), location.LastIndexOf('\\'));
+            if (dot > separator)
+            {
+                return location.Substring(0, dot);
+            }
+
+            return location;
+        }
+
+        /// <summary>
         /// 释放缓存的资源对象，通知辅助器释放底层资源并清空引用。
         /// </summary>
         /// <param name="asset">要释放的缓存资源。</param>
@@ -556,7 +725,7 @@ namespace RFramework.Resource
                 return;
             }
 
-            loadedAssets.Remove(asset.Location);
+            loadedAssets.Remove(new AssetCacheKey(NormalizeLocation(asset.Location), asset.AssetType));
             helper?.ReleaseAsset(asset.Location);
 
             asset.Asset = null;

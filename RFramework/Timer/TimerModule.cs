@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 
 namespace RFramework.Timer
@@ -45,6 +46,9 @@ namespace RFramework.Timer
                 pendingTimers.Clear();
             }
 
+            // 收集回调异常：单个计时器回调抛错隔离，不影响其余计时器与后续模块
+            List<Exception> callbackErrors = null;
+
             // 倒序遍历：支持回调中取消当前或后续计时器
             for (int i = timers.Count - 1; i >= 0 && i < timers.Count; i--)
             {
@@ -61,7 +65,14 @@ namespace RFramework.Timer
 
                 if (timer.Update(deltaTime))
                 {
-                    timer.InvokeCallback();
+                    try
+                    {
+                        timer.InvokeCallback();
+                    }
+                    catch (Exception ex)
+                    {
+                        (callbackErrors ??= new List<Exception>()).Add(ex);
+                    }
                 }
             }
 
@@ -72,6 +83,13 @@ namespace RFramework.Timer
                 {
                     timers.RemoveAt(i);
                 }
+            }
+
+            // 回调异常汇总为模块级异常，交由框架统一上报（Library 不直接记录日志）
+            if (callbackErrors != null)
+            {
+                throw new RFrameworkException(
+                    $"TimerModule: {callbackErrors.Count} timer callback(s) threw exception(s).");
             }
         }
 
