@@ -19,6 +19,9 @@ namespace RFramework
         /// <summary>从 Helper 定义的字节格式解析并缓存一个语言包。</summary>
         void LoadLanguage(string language, byte[] bytes);
 
+        /// <summary>从一个容器原子加载多种语言。</summary>
+        void LoadLanguageBundle(byte[] bytes);
+
         /// <summary>从 JSON 字符串解析并缓存一个语言包。</summary>
         void LoadLanguageFromString(string language, string json);
 

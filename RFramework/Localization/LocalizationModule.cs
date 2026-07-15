@@ -54,6 +54,104 @@ namespace RFramework
             ReplaceLanguage(language, parsed);
         }
 
+        public void LoadLanguageBundle(byte[] bytes)
+        {
+            EnsureHelper();
+            if (!(localizationHelper is ILocalizationBundleHelper bundleHelper))
+            {
+                throw new RFrameworkException(
+                    $"Localization helper '{localizationHelper.GetType().FullName}' "
+                    + "does not support language bundles.");
+            }
+
+            if (bytes == null || bytes.Length == 0)
+            {
+                throw new RFrameworkException("Localization bundle data is empty.");
+            }
+
+            IReadOnlyDictionary<string, Dictionary<string, string>> parsed =
+                bundleHelper.ParseLanguageBundle(bytes);
+            if (parsed == null || parsed.Count == 0)
+            {
+                throw new RFrameworkException(
+                    "Localization helper returned an empty language bundle.");
+            }
+
+            Dictionary<string, Dictionary<string, string>> oldLanguages =
+                new Dictionary<string, Dictionary<string, string>>();
+            List<string> oldSupported = new List<string>(supportedLanguages);
+            List<string> committed = new List<string>(parsed.Count);
+            try
+            {
+                foreach (KeyValuePair<string, Dictionary<string, string>> pair in parsed)
+                {
+                    ValidateLanguage(pair.Key);
+                    if (pair.Value == null || pair.Value.Count == 0)
+                    {
+                        throw new RFrameworkException(
+                            $"Language bundle contains no entries for '{pair.Key}'.");
+                    }
+
+                    if (languageDicts.TryGetValue(
+                        pair.Key, out Dictionary<string, string> oldLanguage))
+                    {
+                        oldLanguages.Add(pair.Key, oldLanguage);
+                    }
+                }
+
+                foreach (KeyValuePair<string, Dictionary<string, string>> pair in parsed)
+                {
+                    languageDicts[pair.Key] = pair.Value;
+                    if (!supportedLanguages.Contains(pair.Key))
+                    {
+                        supportedLanguages.Add(pair.Key);
+                    }
+
+                    committed.Add(pair.Key);
+                }
+            }
+            catch
+            {
+                for (int i = 0; i < committed.Count; i++)
+                {
+                    string language = committed[i];
+                    if (oldLanguages.TryGetValue(
+                        language, out Dictionary<string, string> oldLanguage))
+                    {
+                        languageDicts[language] = oldLanguage;
+                    }
+                    else
+                    {
+                        languageDicts.Remove(language);
+                    }
+                }
+
+                supportedLanguages.Clear();
+                supportedLanguages.AddRange(oldSupported);
+                foreach (KeyValuePair<string, Dictionary<string, string>> pair in parsed)
+                {
+                    if (!oldLanguages.TryGetValue(
+                        pair.Key, out Dictionary<string, string> oldLanguage)
+                        || !ReferenceEquals(oldLanguage, pair.Value))
+                    {
+                        try { localizationHelper.ReleaseLanguage(pair.Key, pair.Value); }
+                        catch { }
+                    }
+                }
+
+                throw;
+            }
+
+            foreach (KeyValuePair<string, Dictionary<string, string>> pair in oldLanguages)
+            {
+                if (!ReferenceEquals(pair.Value, parsed[pair.Key]))
+                {
+                    try { localizationHelper.ReleaseLanguage(pair.Key, pair.Value); }
+                    catch { }
+                }
+            }
+        }
+
         public void LoadLanguageFromString(string language, string json)
         {
             ValidateLanguage(language);
