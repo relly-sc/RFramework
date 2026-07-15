@@ -7,7 +7,7 @@ namespace RFramework
     public interface IUIForm
     {
         /// <summary>
-        /// 获取 UI 资源路径。
+        /// 获取 UI 表单名称。框架加载的 UI 使用资源路径，外部 UI 使用登记名称。
         /// </summary>
         string AssetName { get; }
 

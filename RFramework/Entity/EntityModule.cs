@@ -48,6 +48,12 @@ namespace RFramework
         private readonly Dictionary<long, EntityInstanceObject> activeInstanceObjects = new Dictionary<long, EntityInstanceObject>();
 
         /// <summary>
+        /// 由场景或业务代码创建并持有的外部实体编号集合。
+        /// 外部实体仅由模块代管生命周期，不进入对象池，也不会被模块销毁。
+        /// </summary>
+        private readonly HashSet<long> externalEntityIds = new HashSet<long>();
+
+        /// <summary>
         /// 框架关闭标记，用于 OnHide 的 isShutdown 参数。
         /// </summary>
         private bool isShutdown;
@@ -154,6 +160,9 @@ namespace RFramework
             {
                 HideEntity(allEntities[i].Id);
             }
+
+            // 实体组销毁前立即处理其活动实例，避免延迟回收访问已销毁的实体组。
+            ProcessRecycleQueue(false);
 
             entityGroups.Remove(name);
             group.Destroy();
@@ -374,6 +383,127 @@ namespace RFramework
         }
 
         /// <summary>
+        /// 登记由外部创建并持有的实体。
+        /// </summary>
+        /// <param name="entityId">实体编号，全局唯一且不能为零。</param>
+        /// <param name="assetName">实体逻辑名称。</param>
+        /// <param name="groupName">目标实体组名称。</param>
+        /// <param name="entity">已创建的实体。</param>
+        /// <param name="userData">用户自定义数据。</param>
+        /// <returns>登记后的实体。</returns>
+        public IEntity RegisterEntity(long entityId, string assetName, string groupName, IEntity entity,
+            object userData = null)
+        {
+            if (isShutdown)
+            {
+                throw new RFrameworkException("Entity module is shutdown.");
+            }
+
+            if (entityId == 0)
+            {
+                throw new RFrameworkException("Entity id is invalid.");
+            }
+
+            if (string.IsNullOrEmpty(assetName))
+            {
+                throw new RFrameworkException("Entity name is invalid.");
+            }
+
+            if (entity == null)
+            {
+                throw new RFrameworkException("Entity is invalid.");
+            }
+
+            if (HasEntity(entityId) || IsLoadingEntity(entityId))
+            {
+                throw new RFrameworkException($"Entity id '{entityId}' is already exist or loading.");
+            }
+
+            foreach (KeyValuePair<long, EntityInfo> pair in entityInfos)
+            {
+                if (ReferenceEquals(pair.Value.Entity, entity))
+                {
+                    throw new RFrameworkException("Entity instance is already registered.");
+                }
+            }
+
+            EntityGroup group = GetEntityGroupInternal(groupName);
+            EntityInfo entityInfo = new EntityInfo(entity);
+            bool addedToGroup = false;
+            bool initialized = false;
+
+            try
+            {
+                entityInfos.Add(entityId, entityInfo);
+                externalEntityIds.Add(entityId);
+
+                entityInfo.Status = EntityStatus.WillInit;
+                initialized = true;
+                entity.OnInit(entityId, assetName, group, true, userData);
+                entityInfo.Status = EntityStatus.Inited;
+
+                group.AddEntity(entity);
+                addedToGroup = true;
+
+                entityInfo.Status = EntityStatus.WillShow;
+                entity.OnShow(userData);
+                entityInfo.Status = EntityStatus.Showed;
+
+                if (eventModule != null)
+                {
+                    eventModule.FireSafely(new ShowEntitySuccessEvent(entity, 0f, userData));
+                }
+
+                return entity;
+            }
+            catch (Exception ex)
+            {
+                if (addedToGroup)
+                {
+                    group.RemoveEntity(entity);
+                }
+
+                entityInfos.Remove(entityId);
+                externalEntityIds.Remove(entityId);
+
+                if (initialized)
+                {
+                    try
+                    {
+                        entity.OnRecycle();
+                    }
+                    catch
+                    {
+                        // 保留原始登记异常。
+                    }
+                }
+
+                if (eventModule != null)
+                {
+                    eventModule.FireSafely(new ShowEntityFailureEvent(entityId, assetName,
+                        ex.Message, userData));
+                }
+
+                throw;
+            }
+        }
+
+        /// <summary>
+        /// 注销由外部创建并持有的实体。
+        /// </summary>
+        /// <param name="entityId">实体编号。</param>
+        /// <param name="userData">用户自定义数据。</param>
+        public void UnregisterEntity(long entityId, object userData = null)
+        {
+            if (!externalEntityIds.Contains(entityId))
+            {
+                return;
+            }
+
+            HideEntity(entityId, userData);
+        }
+
+        /// <summary>
         /// 隐藏指定编号的实体。实体将进入对象池等待复用或被销毁。
         /// </summary>
         /// <param name="entityId">实体编号。</param>
@@ -420,6 +550,10 @@ namespace RFramework
             }
 
             IEntity entity = entityInfo.Entity;
+            long entityId = entity.Id;
+            string assetName = entity.AssetName;
+            string groupName = entity.Group.Name;
+            bool isExternal = externalEntityIds.Remove(entityId);
 
             // 解除与父实体的挂接
             if (entityInfo.Parent != null)
@@ -437,17 +571,25 @@ namespace RFramework
             group.RemoveEntity(entity);
 
             // 从全局字典移除
-            entityInfos.Remove(entity.Id);
+            entityInfos.Remove(entityId);
 
             // 分发隐藏完成事件
             if (eventModule != null)
             {
-                eventModule.FireSafely(new HideEntityCompleteEvent(entity.Id, entity.AssetName,
-                    entity.Group.Name, userData));
+                eventModule.FireSafely(new HideEntityCompleteEvent(entityId, assetName,
+                    groupName, userData));
             }
 
-            // 加入回收队列（延迟到下一帧）
-            recycleQueue.Enqueue(entityInfo);
+            if (isExternal)
+            {
+                // 场景实体可能在当前帧随场景销毁，必须立即完成回收生命周期，且不进入对象池。
+                RecycleEntity(entityInfo, false);
+            }
+            else
+            {
+                // 框架拥有的实体延迟到下一帧归还对象池。
+                recycleQueue.Enqueue(entityInfo);
+            }
         }
 
         /// <summary>
@@ -712,26 +854,7 @@ namespace RFramework
         /// <param name="realElapseSeconds">实际流逝时间。</param>
         internal override void Update(float elapseSeconds, float realElapseSeconds)
         {
-            // 处理延迟回收队列
-            while (recycleQueue.Count > 0)
-            {
-                EntityInfo entityInfo = recycleQueue.Dequeue();
-                IEntity entity = entityInfo.Entity;
-                long entityId = entity.Id;
-
-                // 生命周期：WillRecycle → OnRecycle → Recycled
-                entityInfo.Status = EntityStatus.WillRecycle;
-                entity.OnRecycle();
-                entityInfo.Status = EntityStatus.Recycled;
-
-                // 将 instanceObject 归还对象池（委托给 EntityGroup 处理容量检查）
-                if (activeInstanceObjects.TryGetValue(entityId, out EntityInstanceObject instanceObject))
-                {
-                    activeInstanceObjects.Remove(entityId);
-                    EntityGroup group = GetEntityGroupInternal(entity.Group.Name);
-                    group.UnspawnEntityInstance(instanceObject);
-                }
-            }
+            ProcessRecycleQueue(false);
 
             // 驱动所有实体组的 Update（含定时过期释放）
             foreach (KeyValuePair<string, EntityGroup> kv in entityGroups)
@@ -749,19 +872,8 @@ namespace RFramework
             HideAllLoadedEntities();
             HideAllLoadingEntities();
 
-            // 立即处理回收队列（不等下一帧）
-            while (recycleQueue.Count > 0)
-            {
-                EntityInfo entityInfo = recycleQueue.Dequeue();
-                entityInfo.Status = EntityStatus.WillRecycle;
-                entityInfo.Entity.OnRecycle();
-                entityInfo.Status = EntityStatus.Recycled;
-                if (activeInstanceObjects.TryGetValue(entityInfo.Entity.Id, out EntityInstanceObject instanceObject))
-                {
-                    activeInstanceObjects.Remove(entityInfo.Entity.Id);
-                    instanceObject.Release();
-                }
-            }
+            // 立即处理回收队列（不等下一帧），关闭时直接释放框架拥有的活动实例。
+            ProcessRecycleQueue(true);
 
             // 销毁所有实体组
             foreach (KeyValuePair<string, EntityGroup> kv in entityGroups)
@@ -775,6 +887,7 @@ namespace RFramework
             entitiesToReleaseOnLoad.Clear();
             recycleQueue.Clear();
             activeInstanceObjects.Clear();
+            externalEntityIds.Clear();
             // 注意：isShutdown 保持为 true，使关闭后迟到的加载能检测到模块已关闭而取消，
             // 避免在已销毁的模块中复活实体。
         }
@@ -807,6 +920,49 @@ namespace RFramework
             }
 
             throw new RFrameworkException($"Entity group '{groupName}' is not exist.");
+        }
+
+        /// <summary>
+        /// 处理当前延迟回收队列。
+        /// </summary>
+        /// <param name="releaseInstance">是否直接释放活动实例；关闭模块时为 true。</param>
+        private void ProcessRecycleQueue(bool releaseInstance)
+        {
+            while (recycleQueue.Count > 0)
+            {
+                RecycleEntity(recycleQueue.Dequeue(), releaseInstance);
+            }
+        }
+
+        /// <summary>
+        /// 完成单个实体的回收生命周期，并按所有权归还对象池或直接释放。
+        /// </summary>
+        /// <param name="entityInfo">实体信息。</param>
+        /// <param name="releaseInstance">是否直接释放活动实例。</param>
+        private void RecycleEntity(EntityInfo entityInfo, bool releaseInstance)
+        {
+            IEntity entity = entityInfo.Entity;
+            long entityId = entity.Id;
+            string groupName = entity.Group != null ? entity.Group.Name : null;
+
+            entityInfo.Status = EntityStatus.WillRecycle;
+            entity.OnRecycle();
+            entityInfo.Status = EntityStatus.Recycled;
+
+            if (!activeInstanceObjects.TryGetValue(entityId, out EntityInstanceObject instanceObject))
+            {
+                return;
+            }
+
+            activeInstanceObjects.Remove(entityId);
+            if (releaseInstance)
+            {
+                instanceObject.Release();
+                return;
+            }
+
+            EntityGroup group = GetEntityGroupInternal(groupName);
+            group.UnspawnEntityInstance(instanceObject);
         }
 
         private void CleanupFailedEntity(long entityId, EntityGroup group)

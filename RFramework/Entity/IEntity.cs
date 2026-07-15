@@ -19,7 +19,7 @@ namespace RFramework
         EntityStatus Status { get; }
 
         /// <summary>
-        /// 获取实体对应的资源路径。
+        /// 获取实体名称。框架加载的实体使用资源路径，外部实体使用登记名称。
         /// </summary>
         string AssetName { get; }
 

@@ -43,6 +43,22 @@ namespace RFramework
             CancellationToken ct = default);
 
         /// <summary>
+        /// 登记由外部创建并持有的 UI 表单，例如场景中预先放置的 UI。
+        /// 外部 UI 参与窗口栈、全屏遮挡和模块更新，但关闭时不会释放实例或卸载资源。
+        /// </summary>
+        /// <param name="formName">UI 表单唯一名称。</param>
+        /// <param name="uiForm">已创建的 UI 表单。</param>
+        /// <param name="userData">用户自定义数据。</param>
+        void RegisterUIForm(string formName, IUIForm uiForm, object userData = null);
+
+        /// <summary>
+        /// 注销由外部创建并持有的 UI 表单，不释放其实例或资源。
+        /// </summary>
+        /// <param name="formName">UI 表单唯一名称。</param>
+        /// <param name="userData">用户自定义数据。</param>
+        void UnregisterUIForm(string formName, object userData = null);
+
+        /// <summary>
         /// 关闭 UI。
         /// </summary>
         /// <param name="assetName">UI 资源路径。</param>

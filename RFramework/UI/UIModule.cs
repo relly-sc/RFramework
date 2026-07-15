@@ -48,6 +48,12 @@ namespace RFramework
         // is insufficient to return the asset reference when the form is closed.
         private readonly Dictionary<string, object> uiAssets = new Dictionary<string, object>();
 
+        /// <summary>
+        /// 由场景或业务代码创建并持有的外部 UI 名称集合。
+        /// 外部 UI 仅由模块代管生命周期，不释放实例或资源。
+        /// </summary>
+        private readonly HashSet<string> externalUIForms = new HashSet<string>();
+
         private readonly HashSet<IUIForm> pausedUIForms = new HashSet<IUIForm>();
 
         /// <summary>
@@ -220,6 +226,93 @@ namespace RFramework
         }
 
         /// <summary>
+        /// 登记由外部创建并持有的 UI 表单。
+        /// </summary>
+        /// <param name="formName">UI 表单唯一名称。</param>
+        /// <param name="uiForm">已创建的 UI 表单。</param>
+        /// <param name="userData">用户自定义数据。</param>
+        public void RegisterUIForm(string formName, IUIForm uiForm, object userData = null)
+        {
+            if (isShutdown)
+            {
+                throw new RFrameworkException("UI module is shutdown.");
+            }
+
+            if (string.IsNullOrEmpty(formName))
+            {
+                throw new RFrameworkException("UI form name is invalid.");
+            }
+
+            if (uiForm == null)
+            {
+                throw new RFrameworkException("UI form is invalid.");
+            }
+
+            if (!string.Equals(uiForm.AssetName, formName, StringComparison.Ordinal))
+            {
+                throw new RFrameworkException(
+                    $"UI form name '{formName}' does not match form asset name '{uiForm.AssetName}'.");
+            }
+
+            if (uiForms.ContainsKey(formName) || loadingUIForms.Contains(formName))
+            {
+                throw new RFrameworkException($"UI form '{formName}' is already opened or loading.");
+            }
+
+            if (uiForms.ContainsValue(uiForm))
+            {
+                throw new RFrameworkException("UI form instance is already registered.");
+            }
+
+            double startTimestamp = DateTime.UtcNow.Ticks;
+            try
+            {
+                uiForm.OnInit(userData);
+                uiForms.Add(formName, uiForm);
+                externalUIForms.Add(formName);
+                InsertToStack(uiForm);
+                uiForm.OnOpen(userData);
+                ApplyFullScreenVisibility();
+
+                if (eventModule != null)
+                {
+                    float duration = (float)(DateTime.UtcNow.Ticks - startTimestamp) / 10000000f;
+                    eventModule.FireSafely(new OpenUIFormSuccessEvent(formName, uiForm, duration, userData));
+                }
+            }
+            catch (Exception ex)
+            {
+                uiForms.Remove(formName);
+                externalUIForms.Remove(formName);
+                windowStack.Remove(uiForm);
+                pausedUIForms.Remove(uiForm);
+                ApplyFullScreenVisibility();
+
+                if (eventModule != null)
+                {
+                    eventModule.FireSafely(new OpenUIFormFailureEvent(formName, ex.Message, userData));
+                }
+
+                throw;
+            }
+        }
+
+        /// <summary>
+        /// 注销由外部创建并持有的 UI 表单。
+        /// </summary>
+        /// <param name="formName">UI 表单唯一名称。</param>
+        /// <param name="userData">用户自定义数据。</param>
+        public void UnregisterUIForm(string formName, object userData = null)
+        {
+            if (!externalUIForms.Contains(formName))
+            {
+                return;
+            }
+
+            CloseUIForm(formName, userData);
+        }
+
+        /// <summary>
         /// 关闭 UI。
         /// </summary>
         public void CloseUIForm(string assetName, object userData = null)
@@ -236,6 +329,8 @@ namespace RFramework
                 return;
             }
 
+            bool isExternal = externalUIForms.Remove(assetName);
+
             // 生命周期：OnClose
             uiForm.OnClose(userData);
 
@@ -243,14 +338,18 @@ namespace RFramework
             uiForms.Remove(assetName);
             windowStack.Remove(uiForm);
 
-            // 获取实例对象归还对象池或销毁
-            object uiInstance = uiForm.Handle;
-            uiHelper.ReleaseUI(uiInstance);
             pausedUIForms.Remove(uiForm);
-            if (uiAssets.TryGetValue(assetName, out object uiAsset))
+
+            // 外部 UI 由场景或业务代码持有，模块只注销，不释放实例和资源。
+            if (!isExternal)
             {
-                uiAssets.Remove(assetName);
-                resourceModule.UnloadAsset<object>(assetName);
+                object uiInstance = uiForm.Handle;
+                uiHelper.ReleaseUI(uiInstance);
+                if (uiAssets.TryGetValue(assetName, out object uiAsset))
+                {
+                    uiAssets.Remove(assetName);
+                    resourceModule.UnloadAsset<object>(assetName);
+                }
             }
 
             // 恢复被覆盖窗口的可见性
@@ -280,7 +379,11 @@ namespace RFramework
             {
                 IUIForm uiForm = windowStack[i];
                 uiForm.OnClose(userData);
-                uiHelper.ReleaseUI(uiForm.Handle);
+                if (!externalUIForms.Contains(uiForm.AssetName))
+                {
+                    uiHelper.ReleaseUI(uiForm.Handle);
+                }
+
                 pausedUIForms.Remove(uiForm);
             }
 
@@ -292,6 +395,7 @@ namespace RFramework
             windowStack.Clear();
             uiForms.Clear();
             uiAssets.Clear();
+            externalUIForms.Clear();
         }
 
         /// <summary>
@@ -416,7 +520,11 @@ namespace RFramework
         {
             for (int i = 0; i < windowStack.Count; i++)
             {
-                windowStack[i].OnUpdate(elapseSeconds, realElapseSeconds);
+                IUIForm uiForm = windowStack[i];
+                if (!pausedUIForms.Contains(uiForm))
+                {
+                    uiForm.OnUpdate(elapseSeconds, realElapseSeconds);
+                }
             }
         }
 
@@ -430,6 +538,7 @@ namespace RFramework
             windowStack.Clear();
             uiForms.Clear();
             uiAssets.Clear();
+            externalUIForms.Clear();
             pausedUIForms.Clear();
             loadingUIForms.Clear();
             abortedUIForms.Clear();

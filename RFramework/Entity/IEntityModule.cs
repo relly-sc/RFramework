@@ -97,6 +97,26 @@ namespace RFramework
             uint priority = 0, object userData = null, CancellationToken ct = default);
 
         /// <summary>
+        /// 登记由外部创建并持有的实体，例如场景中预先放置的实体。
+        /// 外部实体参与实体组、查询、更新和父子附加，但隐藏时不会进入对象池或销毁实例。
+        /// </summary>
+        /// <param name="entityId">实体编号，全局唯一且不能为零。</param>
+        /// <param name="assetName">实体逻辑名称。</param>
+        /// <param name="groupName">目标实体组名称。</param>
+        /// <param name="entity">已创建的实体。</param>
+        /// <param name="userData">用户自定义数据。</param>
+        /// <returns>登记后的实体。</returns>
+        IEntity RegisterEntity(long entityId, string assetName, string groupName, IEntity entity,
+            object userData = null);
+
+        /// <summary>
+        /// 注销由外部创建并持有的实体，不回收或销毁其实例。
+        /// </summary>
+        /// <param name="entityId">实体编号。</param>
+        /// <param name="userData">用户自定义数据。</param>
+        void UnregisterEntity(long entityId, object userData = null);
+
+        /// <summary>
         /// 隐藏指定编号的实体。实体将进入对象池等待复用或被销毁。
         /// </summary>
         /// <param name="entityId">实体编号。</param>
