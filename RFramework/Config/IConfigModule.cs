@@ -26,6 +26,13 @@ namespace RFramework
         void LoadConfig<T>(byte[] configBytes) where T : class;
 
         /// <summary>
+        /// 从一个容器原子加载多张配置表。
+        /// 同一行类型的多个分片由 Helper 合并；任一表失败时不修改现有缓存。
+        /// </summary>
+        /// <param name="configBytes">配置容器原始字节。</param>
+        void LoadConfigBundle(byte[] configBytes);
+
+        /// <summary>
         /// 从 JSON 字符串加载配置表。适用于运行时动态生成配置、编辑器预览等场景。
         /// JSON 格式应为配置行数组：[{"Id":1,...},{"Id":2,...}]。
         /// 重复加载相同类型会覆盖旧数据。

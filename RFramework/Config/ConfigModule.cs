@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 
 namespace RFramework
@@ -150,6 +151,107 @@ namespace RFramework
             {
                 try { helper.ReleaseConfig(oldTable); }
                 catch { /* best-effort */ }
+            }
+        }
+
+        /// <summary>
+        /// 从一个配置容器原子加载多张配置表。
+        /// Helper 必须实现 IConfigBundleHelper，解析或提交任一步失败都会恢复旧缓存。
+        /// </summary>
+        public void LoadConfigBundle(byte[] configBytes)
+        {
+            EnsureHelper();
+            if (!(helper is IConfigBundleHelper bundleHelper))
+            {
+                throw new RFrameworkException(
+                    $"Config helper '{helper.GetType().FullName}' does not support config bundles.");
+            }
+
+            if (configBytes == null || configBytes.Length == 0)
+            {
+                throw new RFrameworkException("ConfigModule: config bundle bytes are empty.");
+            }
+
+            IReadOnlyDictionary<Type, object> parsedTables =
+                bundleHelper.ParseConfigBundle(configBytes);
+            if (parsedTables == null || parsedTables.Count == 0)
+            {
+                throw new RFrameworkException(
+                    "ConfigModule: helper returned an empty config bundle.");
+            }
+
+            Dictionary<Type, object> oldTables = new Dictionary<Type, object>();
+            Dictionary<Type, int> oldCounts = new Dictionary<Type, int>();
+            List<Type> committedTypes = new List<Type>(parsedTables.Count);
+            try
+            {
+                foreach (KeyValuePair<Type, object> pair in parsedTables)
+                {
+                    if (pair.Key == null || !pair.Key.IsClass || pair.Value == null)
+                    {
+                        throw new RFrameworkException(
+                            "ConfigModule: config bundle contains an invalid table entry.");
+                    }
+
+                    if (configTables.TryGetValue(pair.Key, out object oldTable))
+                    {
+                        oldTables.Add(pair.Key, oldTable);
+                        oldCounts.Add(pair.Key, configRowCounts[pair.Key]);
+                    }
+                }
+
+                foreach (KeyValuePair<Type, object> pair in parsedTables)
+                {
+                    int rowCount = pair.Value is ICollection collection ? collection.Count : 0;
+                    configTables[pair.Key] = pair.Value;
+                    configRowCounts[pair.Key] = rowCount;
+                    committedTypes.Add(pair.Key);
+                }
+
+                foreach (Type rowType in committedTypes)
+                {
+                    FireLoadSuccessEvent(rowType, configRowCounts[rowType]);
+                }
+            }
+            catch (Exception ex)
+            {
+                for (int i = 0; i < committedTypes.Count; i++)
+                {
+                    Type rowType = committedTypes[i];
+                    if (oldTables.TryGetValue(rowType, out object oldTable))
+                    {
+                        configTables[rowType] = oldTable;
+                        configRowCounts[rowType] = oldCounts[rowType];
+                    }
+                    else
+                    {
+                        configTables.Remove(rowType);
+                        configRowCounts.Remove(rowType);
+                    }
+                }
+
+                foreach (KeyValuePair<Type, object> pair in parsedTables)
+                {
+                    if (!oldTables.TryGetValue(pair.Key, out object oldTable)
+                        || !ReferenceEquals(oldTable, pair.Value))
+                    {
+                        try { helper.ReleaseConfig(pair.Value); }
+                        catch { }
+                    }
+
+                    FireLoadFailedEvent(pair.Key, ex.Message);
+                }
+
+                throw;
+            }
+
+            foreach (KeyValuePair<Type, object> pair in oldTables)
+            {
+                if (!ReferenceEquals(pair.Value, parsedTables[pair.Key]))
+                {
+                    try { helper.ReleaseConfig(pair.Value); }
+                    catch { }
+                }
             }
         }
 
