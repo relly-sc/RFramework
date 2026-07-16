@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace RFramework
 {
@@ -145,6 +147,30 @@ namespace RFramework
         }
 
         /// <inheritdoc/>
+        public async Task<AudioHandle> PlayBgmAsync(string assetName, float volume = 1f,
+            bool loop = true, float fadeInSeconds = 0f, float completeDelaySeconds = 0f,
+            Action onComplete = null, CancellationToken ct = default)
+        {
+            ValidateAudioRequest(assetName, "BGM");
+            object audioAsset = await LoadAudioAssetAsync(assetName, ct);
+            ct.ThrowIfCancellationRequested();
+
+            if (currentBgmAssetName != null)
+            {
+                StopBgmInternal();
+            }
+
+            currentBgmAssetName = assetName;
+            currentBgmVolume = volume;
+            bgmPaused = false;
+            int handleId = nextHandleId++;
+            bgmHandleId = handleId;
+            audioHelper.PlayBgm(audioAsset, GetFinalVolume(volume, BgmVolume), loop,
+                fadeInSeconds, completeDelaySeconds, onComplete);
+            return new AudioHandle(handleId, this);
+        }
+
+        /// <inheritdoc/>
         public void StopBgm(float fadeOutSeconds = 0f)
         {
             if (currentBgmAssetName == null)
@@ -204,6 +230,20 @@ namespace RFramework
         }
 
         /// <inheritdoc/>
+        public async Task<AudioHandle> PlaySfxAsync(string assetName, float volume = 1f,
+            float completeDelaySeconds = 0f, Action onComplete = null,
+            CancellationToken ct = default)
+        {
+            ValidateAudioRequest(assetName, "SFX");
+            object audioAsset = await LoadAudioAssetAsync(assetName, ct);
+            ct.ThrowIfCancellationRequested();
+            int handleId = nextHandleId++;
+            audioHelper.PlaySfx(handleId, audioAsset, GetFinalVolume(volume, SfxVolume),
+                completeDelaySeconds, onComplete);
+            return new AudioHandle(handleId, this);
+        }
+
+        /// <inheritdoc/>
         public void StopAllSfx()
         {
             audioHelper?.StopAllSfx();
@@ -229,6 +269,16 @@ namespace RFramework
         }
 
         /// <inheritdoc/>
+        public async Task PlayUIAsync(string assetName, float volume = 1f,
+            CancellationToken ct = default)
+        {
+            ValidateAudioRequest(assetName, "UI");
+            object audioAsset = await LoadAudioAssetAsync(assetName, ct);
+            ct.ThrowIfCancellationRequested();
+            audioHelper.PlayUI(audioAsset, GetFinalVolume(volume, UIVolume));
+        }
+
+        /// <inheritdoc/>
         public void StopAll()
         {
             if (audioHelper == null)
@@ -241,6 +291,13 @@ namespace RFramework
 
             StopBgmInternal();
             audioHelper.StopAllSfx();
+        }
+
+        /// <inheritdoc/>
+        public void ClearCache()
+        {
+            StopAll();
+            UnloadAllAssets();
         }
 
         // ====== 句柄管理 ======
@@ -303,6 +360,56 @@ namespace RFramework
 
             loadedAudioAssets.Add(assetName, audioAsset);
             return audioAsset;
+        }
+
+        /// <summary>
+        /// 异步加载音频资源。并发完成时只保留一份模块缓存，多余引用立即归还 ResourceModule。
+        /// </summary>
+        /// <param name="assetName">音频资源路径。</param>
+        /// <param name="ct">取消令牌。</param>
+        /// <returns>音频资源对象。</returns>
+        private async Task<object> LoadAudioAssetAsync(
+            string assetName, CancellationToken ct)
+        {
+            if (loadedAudioAssets.TryGetValue(assetName, out object cached))
+            {
+                return cached;
+            }
+
+            if (resourceModule == null)
+            {
+                throw new RFrameworkException("Resource module is not set.");
+            }
+
+            object audioAsset = await resourceModule.LoadAssetAsync<object>(
+                assetName, 0, ct);
+            if (audioAsset == null)
+            {
+                throw new RFrameworkException(
+                    $"Audio asset '{assetName}' could not be loaded.");
+            }
+
+            if (loadedAudioAssets.TryGetValue(assetName, out object existing))
+            {
+                resourceModule.UnloadAsset<object>(assetName);
+                return existing;
+            }
+
+            loadedAudioAssets.Add(assetName, audioAsset);
+            return audioAsset;
+        }
+
+        private void ValidateAudioRequest(string assetName, string category)
+        {
+            if (string.IsNullOrEmpty(assetName))
+            {
+                throw new RFrameworkException($"{category} asset name is invalid.");
+            }
+
+            if (audioHelper == null)
+            {
+                throw new RFrameworkException("Audio helper is not set.");
+            }
         }
 
         /// <summary>

@@ -1,4 +1,6 @@
 using System;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace RFramework
 {
@@ -55,6 +57,21 @@ namespace RFramework
             float fadeInSeconds = 0f, float completeDelaySeconds = 0f, Action onComplete = null);
 
         /// <summary>
+        /// 异步加载并播放 BGM。用于 StreamingAssets、persistentDataPath 等不能同步解码的音频文件。
+        /// </summary>
+        /// <param name="assetName">音频资源路径，文件资源需保留扩展名。</param>
+        /// <param name="volume">音量倍率（0~1）。</param>
+        /// <param name="loop">是否循环。</param>
+        /// <param name="fadeInSeconds">淡入时长（秒），0 为立即。</param>
+        /// <param name="completeDelaySeconds">播放完毕后延迟多少秒再触发回调。</param>
+        /// <param name="onComplete">播放完毕与延迟后的回调。</param>
+        /// <param name="ct">取消令牌。</param>
+        /// <returns>播放句柄。</returns>
+        Task<AudioHandle> PlayBgmAsync(string assetName, float volume = 1f, bool loop = true,
+            float fadeInSeconds = 0f, float completeDelaySeconds = 0f,
+            Action onComplete = null, CancellationToken ct = default);
+
+        /// <summary>
         /// 停止 BGM。
         /// </summary>
         /// <param name="fadeOutSeconds">淡出时长（秒），0 为立即。</param>
@@ -81,6 +98,19 @@ namespace RFramework
             float completeDelaySeconds = 0f, Action onComplete = null);
 
         /// <summary>
+        /// 异步加载并播放 SFX。用于 StreamingAssets、persistentDataPath 等文件音频。
+        /// </summary>
+        /// <param name="assetName">音频资源路径，文件资源需保留扩展名。</param>
+        /// <param name="volume">音量倍率（0~1）。</param>
+        /// <param name="completeDelaySeconds">播放完毕后的回调延迟。</param>
+        /// <param name="onComplete">播放完成回调。</param>
+        /// <param name="ct">取消令牌。</param>
+        /// <returns>播放句柄。</returns>
+        Task<AudioHandle> PlaySfxAsync(string assetName, float volume = 1f,
+            float completeDelaySeconds = 0f, Action onComplete = null,
+            CancellationToken ct = default);
+
+        /// <summary>
         /// 停止所有 SFX（同时取消所有 SFX 的回调）。
         /// </summary>
         void StopAllSfx();
@@ -93,8 +123,23 @@ namespace RFramework
         void PlayUI(string assetName, float volume = 1f);
 
         /// <summary>
+        /// 异步加载并播放 UI 音效。用于 StreamingAssets、persistentDataPath 等文件音频。
+        /// </summary>
+        /// <param name="assetName">音频资源路径，文件资源需保留扩展名。</param>
+        /// <param name="volume">音量倍率（0~1）。</param>
+        /// <param name="ct">取消令牌。</param>
+        Task PlayUIAsync(string assetName, float volume = 1f,
+            CancellationToken ct = default);
+
+        /// <summary>
         /// 停止所有音频。
         /// </summary>
         void StopAll();
+
+        /// <summary>
+        /// 停止所有音频并清空已加载音频缓存。
+        /// persistentDataPath 中的同名文件更新后调用，下一次播放会重新加载新文件。
+        /// </summary>
+        void ClearCache();
     }
 }
