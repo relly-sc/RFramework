@@ -126,6 +126,12 @@ namespace RFramework
         }
 
         /// <inheritdoc/>
+        public int ChannelCount
+        {
+            get { return channelList.Count; }
+        }
+
+        /// <inheritdoc/>
         public INetworkChannel DefaultChannel
         {
             get { return defaultChannel; }

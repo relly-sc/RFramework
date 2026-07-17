@@ -28,6 +28,11 @@ namespace RFramework
         private bool isInitialized;
 
         /// <summary>
+        /// 已注册流程状态数量。
+        /// </summary>
+        private int procedureCount;
+
+        /// <summary>
         /// 初始化流程模块的新实例。
         /// </summary>
         public ProcedureModule()
@@ -36,6 +41,7 @@ namespace RFramework
             procedureFsm = null;
             blackboard = new ProcedureBlackboard();
             isInitialized = false;
+            procedureCount = 0;
         }
 
         /// <summary>
@@ -66,6 +72,12 @@ namespace RFramework
         }
 
         /// <inheritdoc/>
+        public int ProcedureCount
+        {
+            get { return procedureCount; }
+        }
+
+        /// <inheritdoc/>
         public void Initialize(params ProcedureStateBase[] procedures)
         {
             if (isInitialized)
@@ -88,6 +100,7 @@ namespace RFramework
             }
 
             procedureFsm = fsmModule.CreateFsm(this, states);
+            procedureCount = procedures.Length;
             isInitialized = true;
         }
 
@@ -154,6 +167,7 @@ namespace RFramework
             }
 
             blackboard.Clear();
+            procedureCount = 0;
             isInitialized = false;
         }
     }

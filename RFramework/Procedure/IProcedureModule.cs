@@ -23,6 +23,11 @@ namespace RFramework
         float CurrentProcedureTime { get; }
 
         /// <summary>
+        /// 获取已注册流程状态数量。
+        /// </summary>
+        int ProcedureCount { get; }
+
+        /// <summary>
         /// 初始化流程模块并注册所有流程状态。
         /// 必须在 StartProcedure 之前调用。
         /// </summary>

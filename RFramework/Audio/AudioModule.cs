@@ -89,6 +89,24 @@ namespace RFramework
         }
 
         /// <inheritdoc/>
+        public int LoadedAudioAssetCount
+        {
+            get { return loadedAudioAssets.Count; }
+        }
+
+        /// <inheritdoc/>
+        public string CurrentBgmAssetName
+        {
+            get { return currentBgmAssetName; }
+        }
+
+        /// <inheritdoc/>
+        public bool IsBgmPaused
+        {
+            get { return bgmPaused; }
+        }
+
+        /// <inheritdoc/>
         internal override int Priority
         {
             get

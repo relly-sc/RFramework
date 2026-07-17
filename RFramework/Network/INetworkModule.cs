@@ -65,6 +65,11 @@ namespace RFramework
         IReadOnlyList<INetworkChannel> GetAllChannels();
 
         /// <summary>
+        /// 获取当前网络通道数量。
+        /// </summary>
+        int ChannelCount { get; }
+
+        /// <summary>
         /// 获取默认通道（第一个创建的通道）。
         /// 未创建任何通道时返回 null。
         /// </summary>

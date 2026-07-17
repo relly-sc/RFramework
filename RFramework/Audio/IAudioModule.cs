@@ -31,6 +31,21 @@ namespace RFramework
         bool Muted { get; set; }
 
         /// <summary>
+        /// 获取已缓存音频资源数量。
+        /// </summary>
+        int LoadedAudioAssetCount { get; }
+
+        /// <summary>
+        /// 获取当前 BGM 资源路径；未播放时返回 null。
+        /// </summary>
+        string CurrentBgmAssetName { get; }
+
+        /// <summary>
+        /// 获取当前 BGM 是否处于暂停状态。
+        /// </summary>
+        bool IsBgmPaused { get; }
+
+        /// <summary>
         /// 设置依赖模块引用。
         /// </summary>
         /// <param name="resourceModule">资源模块，用于加载音频资源。</param>
