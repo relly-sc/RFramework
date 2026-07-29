@@ -1,1 +1,2 @@
 # RFramework
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/relly-sc/RFramework)
