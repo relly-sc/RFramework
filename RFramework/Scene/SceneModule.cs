@@ -45,7 +45,7 @@ namespace RFramework
         /// 获取框架模块优先级。
         /// SceneModule Priority=15，在 Resource(50) 之后更新、之前关闭。
         /// </summary>
-        internal override int Priority
+        internal override int Order
         {
             get
             {
@@ -350,14 +350,14 @@ namespace RFramework
         /// </summary>
         /// <param name="elapseSeconds">逻辑流逝时间。</param>
         /// <param name="realElapseSeconds">实际流逝时间。</param>
-        internal override void Update(float elapseSeconds, float realElapseSeconds)
+        internal override void Tick(float elapseSeconds, float realElapseSeconds)
         {
         }
 
         /// <summary>
         /// 模块关闭。卸载所有已加载场景并清理状态。
         /// </summary>
-        internal override void Shutdown()
+        internal override void Stop()
         {
             // 关闭阶段跳过异步卸载：本模块优先级(15)低于 Resource(50)，
             // 若在此 fire-and-forget 触发卸载，会与 ResourceModule 的 Shutdown/资源销毁

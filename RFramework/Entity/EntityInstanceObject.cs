@@ -1,74 +1,48 @@
+using System;
+
 namespace RFramework
 {
     /// <summary>
-    /// 实体实例对象，包装一个实例化的实体及其原始资源引用。
-    /// 用于对象池管理：Spawn 时取出，Unspawn 时归还，Release 时真正销毁。
+    /// 将一个实体实例与其资源引用绑定，确保最终只释放一次。
     /// </summary>
     internal sealed class EntityInstanceObject
     {
-        /// <summary>
-        /// 实体资源路径（用作对象池的查找键）。
-        /// </summary>
-        public string AssetName { get; }
-
-        /// <summary>
-        /// 原始实体资源对象（Unity 层为 GameObject prefab）。
-        /// </summary>
-        public object EntityAsset { get; }
-
-        /// <summary>
-        /// 实例化后的对象（Unity 层为 GameObject 实例）。
-        /// </summary>
-        public object Target { get; }
-
-        /// <summary>
-        /// 最后一次被使用的时间戳（UtcTicks）。
-        /// Spawn 和 Register 时更新，用于对象池过期判定。
-        /// </summary>
-        public double LastUseTimestamp { get; set; }
-
-        /// <summary>
-        /// 实体辅助器引用，用于 Release 时调用 ReleaseEntity。
-        /// </summary>
-        private readonly IEntityHelper entityHelper;
-
-        private readonly RFramework.IResourceModule resourceModule;
-
+        private readonly IEntityHelper helper;
+        private readonly IResourceModule resourceModule;
         private bool released;
 
         /// <summary>
-        /// 初始化实体实例对象。
+        /// 创建实体实例资源绑定。
         /// </summary>
-        /// <param name="assetName">实体资源路径。</param>
-        /// <param name="entityAsset">原始资源对象。</param>
-        /// <param name="target">实例化后的对象。</param>
-        /// <param name="entityHelper">实体辅助器。</param>
-        public EntityInstanceObject(string assetName, object entityAsset, object target, IEntityHelper entityHelper,
-            RFramework.IResourceModule resourceModule)
+        /// <param name="assetName">实体资源地址。</param>
+        /// <param name="asset">资源对象。</param>
+        /// <param name="target">实例对象。</param>
+        /// <param name="helper">实体 Helper。</param>
+        /// <param name="resourceModule">资源模块。</param>
+        public EntityInstanceObject(string assetName, object asset, object target, IEntityHelper helper,
+            IResourceModule resourceModule)
         {
             AssetName = assetName;
-            EntityAsset = entityAsset;
+            Asset = asset;
             Target = target;
-            this.entityHelper = entityHelper;
+            this.helper = helper;
             this.resourceModule = resourceModule;
-            released = false;
-            LastUseTimestamp = System.DateTime.UtcNow.Ticks;
         }
 
-        /// <summary>
-        /// 判断此实例对象是否已超过指定过期时间。
-        /// </summary>
-        /// <param name="expireTime">过期时间（秒）。</param>
-        /// <returns>是否已过期。</returns>
-        public bool IsExpired(float expireTime)
-        {
-            double elapsedSeconds = (System.DateTime.UtcNow.Ticks - LastUseTimestamp) / 10000000d;
-            return elapsedSeconds >= expireTime;
-        }
+        /// <summary>获取实体资源地址。</summary>
+        public string AssetName { get; }
+
+        /// <summary>获取资源对象。</summary>
+        public object Asset { get; }
+
+        /// <summary>获取实例对象。</summary>
+        public object Target { get; }
+
+        /// <summary>获取或设置实例最近归还缓存的时间。</summary>
+        public float LastUsedAt { get; set; }
 
         /// <summary>
-        /// 释放实体实例（真正销毁 GameObject + UnloadAsset）。
-        /// 由 EntityGroup.Destroy 或对象池容量溢出时调用。
+        /// 释放实体实例及其资源引用；重复调用不会再次释放。
         /// </summary>
         public void Release()
         {
@@ -78,12 +52,29 @@ namespace RFramework
             }
 
             released = true;
-            if (entityHelper != null)
+            Exception failure = null;
+            try
             {
-                entityHelper.ReleaseEntity(EntityAsset, Target);
+                helper.ReleaseEntity(Asset, Target);
+            }
+            catch (Exception ex)
+            {
+                failure = ex;
             }
 
-            resourceModule?.UnloadAsset<object>(AssetName);
+            try
+            {
+                resourceModule.UnloadAsset<object>(AssetName);
+            }
+            catch (Exception ex)
+            {
+                failure = failure == null ? ex : new AggregateException(failure, ex);
+            }
+
+            if (failure != null)
+            {
+                throw new RFrameworkException($"Failed to release entity asset '{AssetName}'.", failure);
+            }
         }
     }
 }

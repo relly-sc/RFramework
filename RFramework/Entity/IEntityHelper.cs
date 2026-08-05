@@ -1,32 +1,25 @@
 namespace RFramework
 {
     /// <summary>
-    /// 实体辅助器接口，封装所有引擎特定的实体操作。
-    /// Library 层通过此接口与 Runtime 层解耦，不同引擎只需实现对应 Helper。
+    /// Library 与引擎对象之间的实体适配边界。
     /// </summary>
     public interface IEntityHelper
     {
-        /// <summary>
-        /// 使用加载好的资源实例化一个实体对象。
-        /// </summary>
-        /// <param name="entityAsset">已加载的实体资源（Unity 层为 GameObject prefab）。</param>
-        /// <returns>实例化后的对象（Unity 层为 GameObject 实例）。</returns>
+        /// <summary>从已加载资源创建引擎实例。</summary>
+        /// <param name="entityAsset">实体资源对象。</param>
+        /// <returns>创建的引擎实例。</returns>
         object InstantiateEntity(object entityAsset);
 
-        /// <summary>
-        /// 为实例化对象创建 IEntity 包装，并关联到实体组。
-        /// </summary>
-        /// <param name="entityInstance">实例化后的对象。</param>
-        /// <param name="group">目标实体组。</param>
-        /// <param name="userData">用户自定义数据。</param>
-        /// <returns>IEntity 包装实例。</returns>
+        /// <summary>取得实例对应的 IEntity 包装。</summary>
+        /// <param name="entityInstance">引擎实例。</param>
+        /// <param name="group">实体所属组。</param>
+        /// <param name="userData">业务自定义数据。</param>
+        /// <returns>实体包装器。</returns>
         IEntity CreateEntity(object entityInstance, IEntityGroup group, object userData);
 
-        /// <summary>
-        /// 释放实体实例和资源。
-        /// </summary>
+        /// <summary>销毁引擎实例；资源引用由 EntityModule 归还。</summary>
         /// <param name="entityAsset">实体资源对象。</param>
-        /// <param name="entityInstance">实体实例对象。</param>
+        /// <param name="entityInstance">待销毁的引擎实例。</param>
         void ReleaseEntity(object entityAsset, object entityInstance);
     }
 }

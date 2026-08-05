@@ -81,7 +81,7 @@ namespace RFramework
         /// 优先级 15：介于 Resource(50) 和 Timer(10) 之间。
         /// 确保通信层在资源系统初始化之后、定时器和事件系统之前就绪。
         /// </summary>
-        internal override int Priority
+        internal override int Order
         {
             get { return 15; }
         }
@@ -769,7 +769,7 @@ namespace RFramework
         /// <summary>
         /// 模块轮询。WebRequest 模块不需要 Update 驱动，空实现。
         /// </summary>
-        internal override void Update(float elapseSeconds, float realElapseSeconds)
+        internal override void Tick(float elapseSeconds, float realElapseSeconds)
         {
             // WebRequest 使用 Task 异步，不需要轮询驱动
         }
@@ -777,7 +777,7 @@ namespace RFramework
         /// <summary>
         /// 关闭模块，取消所有活跃请求并释放资源。
         /// </summary>
-        internal override void Shutdown()
+        internal override void Stop()
         {
             CancelAllByTag(null);
 

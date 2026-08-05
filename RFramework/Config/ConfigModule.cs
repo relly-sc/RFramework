@@ -15,7 +15,7 @@ namespace RFramework
         /// 获取框架模块优先级。
         /// 低于 Resource(50)，确保资源模块先更新，关闭时配置先释放。
         /// </summary>
-        internal override int Priority
+        internal override int Order
         {
             get { return 30; }
         }
@@ -492,7 +492,7 @@ namespace RFramework
         /// </summary>
         /// <param name="elapseSeconds">逻辑流逝时间，以秒为单位。</param>
         /// <param name="realElapseSeconds">真实流逝时间，以秒为单位。</param>
-        internal override void Update(float elapseSeconds, float realElapseSeconds)
+        internal override void Tick(float elapseSeconds, float realElapseSeconds)
         {
             // 当前无需每帧操作
         }
@@ -500,7 +500,7 @@ namespace RFramework
         /// <summary>
         /// 关闭并清理配置模块。释放所有缓存的配置表。
         /// </summary>
-        internal override void Shutdown()
+        internal override void Stop()
         {
             try
             {
@@ -531,7 +531,7 @@ namespace RFramework
 
         /// <summary>
         /// 惰性获取事件模块引用。
-        /// 通过 RFrameworkModuleEntry.GetModule 获取，若事件模块尚未就绪则返回 null。
+        /// 通过 RFrameworkModuleHost.Get 获取，若事件模块尚未就绪则返回 null。
         /// </summary>
         /// <returns>事件模块实例，未就绪时为 null。</returns>
         private IEventModule GetEventModule()
@@ -540,7 +540,7 @@ namespace RFramework
             {
                 try
                 {
-                    eventModule = RFrameworkModuleEntry.GetModule<IEventModule>();
+                    eventModule = RFrameworkModuleHost.Get<IEventModule>();
                 }
                 catch
                 {

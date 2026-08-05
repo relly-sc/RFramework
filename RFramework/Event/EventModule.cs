@@ -55,7 +55,7 @@ namespace RFramework
         /// <summary>
         /// 获取框架模块优先级。高优先级保证事件在处理其他系统逻辑（如 Procedure）前分发。
         /// </summary>
-        internal override int Priority
+        internal override int Order
         {
             get { return 7; }
         }
@@ -63,7 +63,7 @@ namespace RFramework
         /// <summary>
         /// 事件模块轮询。从异步队列中取出所有事件并在主线程分发。
         /// </summary>
-        internal override void Update(float elapseSeconds, float realElapseSeconds)
+        internal override void Tick(float elapseSeconds, float realElapseSeconds)
         {
             // 持锁仅做出队，释放锁后再执行回调，避免持锁期间阻塞 FireAsync 入队或死锁
             List<Action> toInvoke = new List<Action>();
@@ -102,7 +102,7 @@ namespace RFramework
         /// <summary>
         /// 关闭并清理事件模块，释放所有资源。
         /// </summary>
-        internal override void Shutdown()
+        internal override void Stop()
         {
             lock (queueLock)
             {
@@ -408,11 +408,11 @@ namespace RFramework
             }
 
             // 派发过程中有 handler 抛异常：按框架约定以 RFrameworkException 上报，
-            // 由 Runtime 层（EventComponent.Fire / BaseComponent.Update）捕获并写日志。
+            // 由 Runtime 层（EventComponent.Fire / UnityRFrameworkController.Update）捕获并写日志。
             if (dispatchError != null)
             {
                 throw new RFrameworkException(
-                    Utility.Text.Format("EventModule: handler for [{0}] threw exception.", type.FullName),
+                    string.Format("EventModule: handler for [{0}] threw exception.", type.FullName),
                     dispatchError);
             }
         }

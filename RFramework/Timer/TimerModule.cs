@@ -26,7 +26,7 @@ namespace RFramework
         /// 高优先级确保计时器在事件系统（Priority 7）之前更新，
         /// 使计时器回调中发布的异步事件能在同帧被事件模块分发。
         /// </summary>
-        internal override int Priority
+        internal override int Order
         {
             get { return 10; }
         }
@@ -37,7 +37,7 @@ namespace RFramework
         /// </summary>
         /// <param name="elapseSeconds">逻辑流逝时间（受 timeScale 影响）。</param>
         /// <param name="realElapseSeconds">真实流逝时间（不受 timeScale 影响）。</param>
-        internal override void Update(float elapseSeconds, float realElapseSeconds)
+        internal override void Tick(float elapseSeconds, float realElapseSeconds)
         {
             // 合并本帧新注册的计时器（双缓冲，避免遍历中修改）
             if (pendingTimers.Count > 0)
@@ -96,7 +96,7 @@ namespace RFramework
         /// <summary>
         /// 关闭并清理计时器模块。
         /// </summary>
-        internal override void Shutdown()
+        internal override void Stop()
         {
             timers.Clear();
             pendingTimers.Clear();

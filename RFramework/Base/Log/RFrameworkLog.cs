@@ -1,157 +1,182 @@
+using System;
+using System.Globalization;
+
 namespace RFramework
 {
     /// <summary>
-    /// 框架日志类。
-    /// 所有 Info/Warning/Error 方法始终工作，日志开关由 Runtime 层 Log 类的 ENABLE_LOG 宏统一控制。
+    /// Library 层日志桥接入口。具体输出由 Runtime 安装的 <see cref="ILogSink"/> 提供。
     /// </summary>
-    public static partial class RFrameworkLog
+    public static class RFrameworkLog
     {
-        private static ILogHelper logHelper;
+        private static readonly object Gate = new object();
+        private static ILogSink sink;
 
         /// <summary>
-        /// 获取日志辅助器是否已初始化。
+        /// 获取当前是否已安装日志接收器。
         /// </summary>
         public static bool IsInitialized
         {
-            get { return logHelper != null; }
-        }
-
-        /// <summary>
-        /// 设置游戏框架日志辅助器。
-        /// </summary>
-        /// <param name="_logHelper">要设置的游戏框架日志辅助器。</param>
-        public static void SetLogHelper(ILogHelper _logHelper)
-        {
-            RFrameworkLog.logHelper = _logHelper;
-        }
-
-        /// <summary>
-        /// 打印信息级别日志，用于记录程序正常运行日志信息。
-        /// </summary>
-        /// <param name="message">日志内容</param>
-        public static void Info(object message)
-        {
-            if (logHelper == null)
+            get
             {
-                throw new RFrameworkException("RFrameworkLog: Log helper is not initialized. Please call SetLogHelper before using any log methods.");
+                lock (Gate)
+                {
+                    return sink != null;
+                }
+            }
+        }
+
+        /// <summary>
+        /// 安装日志接收器，并释放之前的接收器。
+        /// </summary>
+        /// <param name="value">新的日志接收器。</param>
+        public static void SetSink(ILogSink value)
+        {
+            if (value == null)
+            {
+                throw new RFrameworkException("Log sink cannot be null.");
             }
 
-            logHelper.Log(RFrameworkLogLevel.Info, message);
-        }
-
-        /// <summary>
-        /// 打印信息级别日志，用于记录程序正常运行日志信息。
-        /// </summary>
-        /// <param name="message">日志内容</param>
-        public static void Info(string message)
-        {
-            if (logHelper == null)
+            ILogSink previous;
+            lock (Gate)
             {
-                throw new RFrameworkException("RFrameworkLog: Log helper is not initialized. Please call SetLogHelper before using any log methods.");
+                previous = sink;
+                sink = value;
             }
 
-            logHelper.Log(RFrameworkLogLevel.Info, message);
+            if (!ReferenceEquals(previous, value))
+            {
+                DisposeSink(previous);
+            }
         }
 
         /// <summary>
-        /// 打印信息级别日志，用于记录程序正常运行日志信息。
+        /// 移除并释放当前日志接收器。
         /// </summary>
-        /// <param name="format">日志格式。</param>
-        /// <param name="args">日志参数。</param>
-        public static void Info(string format, params object[] args)
+        public static void Clear()
         {
-            if (logHelper == null)
+            ILogSink previous;
+            lock (Gate)
             {
-                throw new RFrameworkException("RFrameworkLog: Log helper is not initialized. Please call SetLogHelper before using any log methods.");
+                previous = sink;
+                sink = null;
             }
 
-            logHelper.Log(RFrameworkLogLevel.Info, Utility.Text.Format(format, args));
+            DisposeSink(previous);
         }
 
         /// <summary>
-        /// 打印警告级别日志，建议在发生局部功能逻辑错误，但尚不会导致游戏崩溃或异常时使用。
+        /// 写入一条日志；未安装接收器时抛出框架异常。
         /// </summary>
+        /// <param name="level">日志级别。</param>
         /// <param name="message">日志内容。</param>
-        public static void Warning(object message)
+        public static void Write(LogLevel level, object message)
         {
-            if (logHelper == null)
-            {
-                throw new RFrameworkException("RFrameworkLog: Log helper is not initialized. Please call SetLogHelper before using any log methods.");
-            }
-
-            logHelper.Log(RFrameworkLogLevel.Warning, message);
+            GetRequiredSink().Write(level, message?.ToString() ?? "null");
         }
 
         /// <summary>
-        /// 打印警告级别日志，建议在发生局部功能逻辑错误，但尚不会导致游戏崩溃或异常时使用。
+        /// 格式化并写入一条日志；未安装接收器时抛出框架异常。
         /// </summary>
+        /// <param name="level">日志级别。</param>
+        /// <param name="format">复合格式字符串。</param>
+        /// <param name="args">格式化参数。</param>
+        public static void Write(LogLevel level, string format, params object[] args)
+        {
+            if (format == null)
+            {
+                throw new RFrameworkException("Log format cannot be null.");
+            }
+
+            GetRequiredSink().Write(
+                level, string.Format(CultureInfo.InvariantCulture, format, args));
+        }
+
+        /// <summary>
+        /// 尝试写入日志。框架尚未启动、已经关闭或接收器失败时返回 false。
+        /// </summary>
+        /// <param name="level">日志级别。</param>
         /// <param name="message">日志内容。</param>
-        public static void Warning(string message)
+        /// <returns>成功交给接收器时返回 true。</returns>
+        public static bool TryWrite(LogLevel level, object message)
         {
-            if (logHelper == null)
-            {
-                throw new RFrameworkException("RFrameworkLog: Log helper is not initialized. Please call SetLogHelper before using any log methods.");
-            }
-
-            logHelper.Log(RFrameworkLogLevel.Warning, message);
+            return TryWriteCore(level, message?.ToString() ?? "null");
         }
 
         /// <summary>
-        /// 打印警告级别日志，建议在发生局部功能逻辑错误，但尚不会导致游戏崩溃或异常时使用。
+        /// 尝试格式化并写入日志。
         /// </summary>
-        /// <param name="format">日志格式。</param>
-        /// <param name="args">日志参数。</param>
-        public static void Warning(string format, params object[] args)
+        /// <param name="level">日志级别。</param>
+        /// <param name="format">复合格式字符串。</param>
+        /// <param name="args">格式化参数。</param>
+        /// <returns>成功交给接收器时返回 true。</returns>
+        public static bool TryWrite(LogLevel level, string format, params object[] args)
         {
-            if (logHelper == null)
+            if (format == null)
             {
-                throw new RFrameworkException("RFrameworkLog: Log helper is not initialized. Please call SetLogHelper before using any log methods.");
+                return false;
             }
 
-            logHelper.Log(RFrameworkLogLevel.Warning, Utility.Text.Format(format, args));
+            string message;
+            try
+            {
+                message = string.Format(CultureInfo.InvariantCulture, format, args);
+            }
+            catch (FormatException)
+            {
+                return false;
+            }
+
+            return TryWriteCore(level, message);
         }
 
-        /// <summary>
-        /// 打印错误级别日志，建议在发生功能逻辑错误，但尚不会导致游戏崩溃或异常时使用。
-        /// </summary>
-        /// <param name="message">日志内容。</param>
-        public static void Error(object message)
+        private static ILogSink GetRequiredSink()
         {
-            if (logHelper == null)
+            lock (Gate)
             {
-                throw new RFrameworkException("RFrameworkLog: Log helper is not initialized. Please call SetLogHelper before using any log methods.");
+                return sink ?? throw new RFrameworkException(
+                    "No log sink is installed. Initialize the framework before writing logs.");
             }
-
-            logHelper.Log(RFrameworkLogLevel.Error, message);
         }
 
-        /// <summary>
-        /// 打印错误级别日志，建议在发生功能逻辑错误，但尚不会导致游戏崩溃或异常时使用。
-        /// </summary>
-        /// <param name="message">日志内容。</param>
-        public static void Error(string message)
+        private static bool TryWriteCore(LogLevel level, string message)
         {
-            if (logHelper == null)
+            ILogSink current;
+            lock (Gate)
             {
-                throw new RFrameworkException("RFrameworkLog: Log helper is not initialized. Please call SetLogHelper before using any log methods.");
+                current = sink;
             }
 
-            logHelper.Log(RFrameworkLogLevel.Error, message);
+            if (current == null)
+            {
+                return false;
+            }
+
+            try
+            {
+                current.Write(level, message);
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
         }
 
-        /// <summary>
-        /// 打印错误级别日志，建议在发生功能逻辑错误，但尚不会导致游戏崩溃或异常时使用。
-        /// </summary>
-        /// <param name="format">日志格式。</param>
-        /// <param name="args">日志参数。</param>
-        public static void Error(string format, params object[] args)
+        private static void DisposeSink(ILogSink value)
         {
-            if (logHelper == null)
+            if (value == null)
             {
-                throw new RFrameworkException("RFrameworkLog: Log helper is not initialized. Please call SetLogHelper before using any log methods.");
+                return;
             }
 
-            logHelper.Log(RFrameworkLogLevel.Error, Utility.Text.Format(format, args));
+            try
+            {
+                value.Dispose();
+            }
+            catch
+            {
+                // 日志后端关闭失败不能阻止框架继续替换或清理全局接收器。
+            }
         }
     }
 }

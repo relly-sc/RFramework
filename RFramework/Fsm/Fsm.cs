@@ -123,7 +123,7 @@ namespace RFramework
                 if (this.states.ContainsKey(stateType))
                 {
                     throw new RFrameworkException(
-                        Utility.Text.Format("Fsm state '{0}' is already exist.", stateType.FullName));
+                        string.Format("Fsm state '{0}' is already exist.", stateType.FullName));
                 }
 
                 this.states.Add(stateType, state);
@@ -232,7 +232,7 @@ namespace RFramework
             if (!states.TryGetValue(stateType, out IFsmState targetState))
             {
                 throw new RFrameworkException(
-                    Utility.Text.Format("Fsm can not change state to '{0}' which is not exist.", stateType.FullName));
+                    string.Format("Fsm can not change state to '{0}' which is not exist.", stateType.FullName));
             }
 
             // 同一状态则忽略
@@ -355,7 +355,7 @@ namespace RFramework
             {
                 Exception first = errors[0];
                 throw new RFrameworkException(
-                    Utility.Text.Format("Fsm shutdown encountered {0} state error(s).", errors.Count), first);
+                    string.Format("Fsm shutdown encountered {0} state error(s).", errors.Count), first);
             }
         }
 
@@ -372,7 +372,7 @@ namespace RFramework
             }
 
             throw new RFrameworkException(
-                Utility.Text.Format("Fsm can not find state type '{0}'.", stateType.FullName));
+                string.Format("Fsm can not find state type '{0}'.", stateType.FullName));
         }
     }
 }

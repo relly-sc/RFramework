@@ -107,7 +107,7 @@ namespace RFramework
         }
 
         /// <inheritdoc/>
-        internal override int Priority
+        internal override int Order
         {
             get
             {
@@ -454,12 +454,12 @@ namespace RFramework
         }
 
         /// <inheritdoc/>
-        internal override void Update(float elapseSeconds, float realElapseSeconds)
+        internal override void Tick(float elapseSeconds, float realElapseSeconds)
         {
         }
 
         /// <inheritdoc/>
-        internal override void Shutdown()
+        internal override void Stop()
         {
             StopAll();
             UnloadAllAssets();

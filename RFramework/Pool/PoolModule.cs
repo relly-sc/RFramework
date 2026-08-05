@@ -21,7 +21,7 @@ namespace RFramework
         /// <summary>
         /// 获取框架模块优先级。
         /// </summary>
-        internal override int Priority
+        internal override int Order
         {
             get { return 5; }
         }
@@ -30,14 +30,14 @@ namespace RFramework
         /// 对象池服务轮询。
         /// 对象池本身不需要每帧更新——Spawn/Unspawn 是事件驱动的。
         /// </summary>
-        internal override void Update(float elapseSeconds, float realElapseSeconds)
+        internal override void Tick(float elapseSeconds, float realElapseSeconds)
         {
         }
 
         /// <summary>
         /// 关闭并清理对象池服务，销毁所有对象池。
         /// </summary>
-        internal override void Shutdown()
+        internal override void Stop()
         {
             List<IObjectPoolBase> poolsToClear;
             lock (pools)
@@ -111,7 +111,7 @@ namespace RFramework
             {
                 if (pools.ContainsKey(name))
                 {
-                    throw new RFrameworkException(Utility.Text.Format("Object pool '{0}' already exists.", name));
+                    throw new RFrameworkException(string.Format("Object pool '{0}' already exists.", name));
                 }
 
                 ObjectPool<T> pool = new ObjectPool<T>(name, createFunc, onSpawn, onUnspawn, onDestroy, capacity);

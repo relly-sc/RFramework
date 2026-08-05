@@ -109,7 +109,7 @@ namespace RFramework
         {
             if (isClearing)
             {
-                throw new RFrameworkException(Utility.Text.Format(
+                throw new RFrameworkException(string.Format(
                     "Object pool '{0}' can not spawn objects while it is clearing.", name));
             }
 
@@ -123,7 +123,7 @@ namespace RFramework
                 obj = createFunc();
                 if (obj == null)
                 {
-                    throw new RFrameworkException(Utility.Text.Format("Object pool '{0}' create function returned null.", name));
+                    throw new RFrameworkException(string.Format("Object pool '{0}' create function returned null.", name));
                 }
             }
 
@@ -188,7 +188,7 @@ namespace RFramework
                 T obj = createFunc();
                 if (obj == null)
                 {
-                    throw new RFrameworkException(Utility.Text.Format("Object pool '{0}' create function returned null during prewarm.", name));
+                    throw new RFrameworkException(string.Format("Object pool '{0}' create function returned null during prewarm.", name));
                 }
 
                 InvokeUnspawn(obj);
@@ -247,7 +247,7 @@ namespace RFramework
         /// </summary>
         public override string ToString()
         {
-            return Utility.Text.Format("ObjectPool<{0}>({1}) Total:{2} Available:{3} Active:{4}",
+            return string.Format("ObjectPool<{0}>({1}) Total:{2} Available:{3} Active:{4}",
                 typeof(T).Name, name, TotalCount, available.Count, active.Count);
         }
 

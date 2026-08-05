@@ -17,7 +17,7 @@ namespace RFramework
         /// 资源是配置、场景、实体、UI、音频和本地化的共同依赖。
         /// 高优先级使其先于消费者更新，并在关闭时最后释放。
         /// </summary>
-        internal override int Priority
+        internal override int Order
         {
             get { return 50; }
         }
@@ -584,7 +584,7 @@ namespace RFramework
                 if (!loadedAssets.TryGetValue(key, out CachedAsset asset))
                 {
                     throw new RFrameworkException(
-                        Utility.Text.Format("Resource '{0}' with type '{1}' is not loaded.", location, typeof(T).FullName));
+                        string.Format("Resource '{0}' with type '{1}' is not loaded.", location, typeof(T).FullName));
                 }
 
                 ReleaseReferenceUnsafe(key, asset);
@@ -707,7 +707,7 @@ namespace RFramework
         /// </summary>
         /// <param name="elapseSeconds">逻辑流逝时间。</param>
         /// <param name="realElapseSeconds">真实流逝时间。</param>
-        internal override void Update(float elapseSeconds, float realElapseSeconds)
+        internal override void Tick(float elapseSeconds, float realElapseSeconds)
         {
             // 处理待回收队列——每帧最多释放 5 个，避免尖峰
             List<CachedAsset> toRelease = new List<CachedAsset>(5);
@@ -735,7 +735,7 @@ namespace RFramework
         /// <summary>
         /// 关闭并清理资源模块。释放所有缓存资源，销毁底层资源系统。
         /// </summary>
-        internal override void Shutdown()
+        internal override void Stop()
         {
             // 先标记关闭并取消模块级令牌：令所有在飞加载（含底层资源加载续体）
             // 立即感知取消，避免关闭后写入已清空的缓存表（缓存"复活"）。
@@ -906,7 +906,7 @@ namespace RFramework
 
         /// <summary>
         /// 惰性获取事件模块引用。
-        /// 通过 RFrameworkModuleEntry.GetModule 获取，若事件模块尚未就绪则返回 null。
+        /// 通过 RFrameworkModuleHost.Get 获取，若事件模块尚未就绪则返回 null。
         /// </summary>
         /// <returns>事件模块实例，未就绪时为 null。</returns>
         private IEventModule GetEventModule()
@@ -915,7 +915,7 @@ namespace RFramework
             {
                 try
                 {
-                    eventModule = RFrameworkModuleEntry.GetModule<IEventModule>();
+                    eventModule = RFrameworkModuleHost.Get<IEventModule>();
                 }
                 catch
                 {

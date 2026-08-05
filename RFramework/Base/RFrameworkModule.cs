@@ -1,33 +1,25 @@
-
 namespace RFramework
 {
     /// <summary>
-    /// 框架模块抽象类
+    /// 由框架统一驱动和停止的模块基类。
     /// </summary>
     internal abstract class RFrameworkModule
     {
         /// <summary>
-        /// 获取游戏框架模块优先级。
+        /// 获取调度顺序。数值较大的模块优先执行 Tick，较晚执行 Stop。
         /// </summary>
-        /// <remarks>优先级较高的模块会优先轮询，并且关闭操作会后进行。</remarks>
-        internal virtual int Priority
-        {
-            get
-            {
-                return 0;
-            }
-        }
+        internal virtual int Order => 0;
 
         /// <summary>
-        /// 框架模块轮询。
+        /// 执行一次模块轮询。
         /// </summary>
-        /// <param name="elapseSeconds">逻辑流逝时间，以秒为单位。</param>
-        /// <param name="realElapseSeconds">真实流逝时间，以秒为单位。</param>
-        internal abstract void Update(float elapseSeconds, float realElapseSeconds);
+        /// <param name="deltaTime">受时间缩放影响的帧间隔。</param>
+        /// <param name="unscaledDeltaTime">不受时间缩放影响的帧间隔。</param>
+        internal abstract void Tick(float deltaTime, float unscaledDeltaTime);
 
         /// <summary>
-        /// 关闭并清理框架模块。
+        /// 停止模块并释放其持有的资源。
         /// </summary>
-        internal abstract void Shutdown();
+        internal abstract void Stop();
     }
 }

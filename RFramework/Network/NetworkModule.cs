@@ -1,12 +1,9 @@
-using System;
 using System.Collections.Generic;
-using System.Threading.Tasks;
 
 namespace RFramework
 {
     /// <summary>
     /// 网络模块核心实现。作为通道管理器，支持同时管理多个服务器连接。
-    /// 保留默认通道的单连接 API 以向后兼容。
     /// </summary>
     internal sealed class NetworkModule : RFrameworkModule, INetworkModule
     {
@@ -36,7 +33,7 @@ namespace RFramework
         private NetworkChannel defaultChannel;
 
         /// <inheritdoc/>
-        internal override int Priority
+        internal override int Order
         {
             get
             {
@@ -146,101 +143,10 @@ namespace RFramework
             this.timerModule = timerModule;
         }
 
-        // ====== 向后兼容：默认通道代理 ======
-
-        /// <inheritdoc/>
-        public bool IsConnected
-        {
-            get { return defaultChannel != null && defaultChannel.IsConnected; }
-        }
-
-        /// <inheritdoc/>
-        public float HeartbeatInterval
-        {
-            get { return defaultChannel != null ? defaultChannel.HeartbeatInterval : 0f; }
-            set
-            {
-                if (defaultChannel != null)
-                {
-                    defaultChannel.HeartbeatInterval = value;
-                }
-            }
-        }
-
-        /// <inheritdoc/>
-        public bool AutoReconnect
-        {
-            get { return defaultChannel != null && defaultChannel.AutoReconnect; }
-            set
-            {
-                if (defaultChannel != null)
-                {
-                    defaultChannel.AutoReconnect = value;
-                }
-            }
-        }
-
-        /// <inheritdoc/>
-        public float ReconnectInterval
-        {
-            get { return defaultChannel != null ? defaultChannel.ReconnectInterval : 0f; }
-            set
-            {
-                if (defaultChannel != null)
-                {
-                    defaultChannel.ReconnectInterval = value;
-                }
-            }
-        }
-
-        /// <inheritdoc/>
-        public void SetHelper(INetworkHelper helper)
-        {
-            EnsureDefaultChannel();
-            defaultChannel.SetHelper(helper);
-        }
-
-        /// <inheritdoc/>
-        public Task ConnectAsync(string ip, int port, System.Threading.CancellationToken ct = default)
-        {
-            EnsureDefaultChannel();
-            return defaultChannel.ConnectAsync(ip, port, ct);
-        }
-
-        /// <inheritdoc/>
-        public void Disconnect()
-        {
-            defaultChannel?.Disconnect();
-        }
-
-        /// <inheritdoc/>
-        public void Send(int msgId, byte[] body)
-        {
-            if (defaultChannel == null || !defaultChannel.IsConnected)
-            {
-                throw new RFrameworkException("Default channel is not connected. Cannot send message.");
-            }
-
-            defaultChannel.Send(msgId, body);
-        }
-
-        /// <inheritdoc/>
-        public void RegisterHandler(int msgId, Action<byte[]> handler)
-        {
-            EnsureDefaultChannel();
-            defaultChannel.RegisterHandler(msgId, handler);
-        }
-
-        /// <inheritdoc/>
-        public void UnregisterHandler(int msgId)
-        {
-            defaultChannel?.UnregisterHandler(msgId);
-        }
-
         // ====== 生命周期 ======
 
         /// <inheritdoc/>
-        internal override void Update(float elapseSeconds, float realElapseSeconds)
+        internal override void Tick(float elapseSeconds, float realElapseSeconds)
         {
             for (int i = 0; i < channelList.Count; i++)
             {
@@ -249,7 +155,7 @@ namespace RFramework
         }
 
         /// <inheritdoc/>
-        internal override void Shutdown()
+        internal override void Stop()
         {
             foreach (NetworkChannel channel in channelList)
             {
@@ -261,17 +167,5 @@ namespace RFramework
             defaultChannel = null;
         }
 
-        // ====== 内部方法 ======
-
-        /// <summary>
-        /// 确保默认通道存在。如果尚未创建任何通道，自动创建名称为 "Default" 的默认通道。
-        /// </summary>
-        private void EnsureDefaultChannel()
-        {
-            if (defaultChannel == null)
-            {
-                CreateChannel("Default");
-            }
-        }
     }
 }

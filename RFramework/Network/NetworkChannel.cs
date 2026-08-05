@@ -383,7 +383,7 @@ namespace RFramework
                 Interlocked.Decrement(ref queuedCallbackCount);
                 if (Interlocked.Exchange(ref callbackOverflowReported, 1) == 0)
                 {
-                    string message = Utility.Text.Format(
+                    string message = string.Format(
                         "Network channel '{0}' callback queue overflow. "
                         + "Non-critical callbacks are being dropped.", Name);
                     EnqueueCallback(

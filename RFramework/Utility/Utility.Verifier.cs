@@ -1,165 +1,181 @@
-
 using System;
+using System.Buffers;
 using System.IO;
 
 namespace RFramework
 {
+    /// <summary>
+    /// 框架通用工具入口。
+    /// </summary>
     public static partial class Utility
     {
         /// <summary>
-        /// 校验相关的实用函数。
+        /// 数据完整性校验工具。
         /// </summary>
-        public static partial class Verifier
+        public static class Verifier
         {
-            /// <summary>
-            /// CRC32 计算的缓存字节数组长度。
-            /// </summary>
-            private const int CachedBytesLength = 0x1000;
-            private static readonly object s_SyncRoot = new object();
-            /// <summary>
-            /// CRC32 计算使用的缓存字节数组。
-            /// </summary>
-            private static readonly byte[] s_CachedBytes = new byte[CachedBytesLength];
-            /// <summary>
-            /// CRC32 算法实例。
-            /// </summary>
-            private static readonly Crc32 s_Algorithm = new Crc32();
+            private const uint Crc32Polynomial = 0xEDB88320u;
+            private const uint Crc32InitialValue = uint.MaxValue;
+            private const int StreamBufferSize = 8192;
 
-            /// <summary>
-            /// 计算二进制流的 CRC32。
-            /// </summary>
-            /// <param name="bytes">指定的二进制流。</param>
-            /// <returns>计算后的 CRC32。</returns>
-            public static int GetCrc32(byte[] bytes)
+            private static readonly uint[] Crc32Table = CreateCrc32Table();
+
+        /// <summary>
+        /// 计算完整字节数组的标准 CRC-32 校验值。
+        /// </summary>
+        /// <param name="bytes">待校验字节数组。</param>
+        /// <returns>CRC-32 校验值。</returns>
+        public static int GetCrc32(byte[] bytes)
             {
                 if (bytes == null)
                 {
-                    throw new RFrameworkException("Bytes is invalid.");
+                    throw new RFrameworkException("CRC32 source bytes cannot be null.");
                 }
 
                 return GetCrc32(bytes, 0, bytes.Length);
             }
 
-            /// <summary>
-            /// 计算二进制流的 CRC32。
-            /// </summary>
-            /// <param name="bytes">指定的二进制流。</param>
-            /// <param name="offset">二进制流的偏移。</param>
-            /// <param name="length">二进制流的长度。</param>
-            /// <returns>计算后的 CRC32。</returns>
-            public static int GetCrc32(byte[] bytes, int offset, int length)
+        /// <summary>
+        /// 计算字节数组指定片段的标准 CRC-32 校验值。
+        /// </summary>
+        /// <param name="bytes">待校验字节数组。</param>
+        /// <param name="offset">起始偏移。</param>
+        /// <param name="length">参与校验的字节数。</param>
+        /// <returns>CRC-32 校验值。</returns>
+        public static int GetCrc32(byte[] bytes, int offset, int length)
             {
-                if (bytes == null)
-                {
-                    throw new RFrameworkException("Bytes is invalid.");
-                }
-
-                if (offset < 0 || length < 0 || offset > bytes.Length - length)
-                {
-                    throw new RFrameworkException("Offset or length is invalid.");
-                }
-
-                lock (s_SyncRoot)
-                {
-                    try
-                    {
-                        s_Algorithm.HashCore(bytes, offset, length);
-                        return (int)s_Algorithm.HashFinal();
-                    }
-                    finally
-                    {
-                        s_Algorithm.Initialize();
-                    }
-                }
+                ValidateSegment(bytes, offset, length);
+                uint state = UpdateCrc32(Crc32InitialValue, bytes, offset, length);
+                return unchecked((int)~state);
             }
 
-            /// <summary>
-            /// 计算二进制流的 CRC32。
-            /// </summary>
-            /// <param name="stream">指定的二进制流。</param>
-            /// <returns>计算后的 CRC32。</returns>
-            public static int GetCrc32(Stream stream)
+        /// <summary>
+        /// 从流的当前位置读取到末尾并计算标准 CRC-32 校验值，不关闭输入流。
+        /// </summary>
+        /// <param name="stream">待校验输入流。</param>
+        /// <returns>CRC-32 校验值。</returns>
+        public static int GetCrc32(Stream stream)
             {
                 if (stream == null)
                 {
-                    throw new RFrameworkException("Stream is invalid.");
+                    throw new RFrameworkException("CRC32 source stream cannot be null.");
                 }
 
-                lock (s_SyncRoot)
+                byte[] buffer = ArrayPool<byte>.Shared.Rent(StreamBufferSize);
+                uint state = Crc32InitialValue;
+                try
                 {
-                    try
+                    int count;
+                    while ((count = stream.Read(buffer, 0, buffer.Length)) > 0)
                     {
-                        while (true)
-                        {
-                            int bytesRead = stream.Read(s_CachedBytes, 0, CachedBytesLength);
-                            if (bytesRead <= 0)
-                            {
-                                break;
-                            }
-
-                            s_Algorithm.HashCore(s_CachedBytes, 0, bytesRead);
-                        }
-
-                        return (int)s_Algorithm.HashFinal();
-                    }
-                    finally
-                    {
-                        s_Algorithm.Initialize();
-                        Array.Clear(s_CachedBytes, 0, CachedBytesLength);
+                        state = UpdateCrc32(state, buffer, 0, count);
                     }
                 }
-            }
-
-            /// <summary>
-            /// 获取 CRC32 数值的二进制数组。
-            /// </summary>
-            /// <param name="crc32">CRC32 数值。</param>
-            /// <returns>CRC32 数值的二进制数组。</returns>
-            public static byte[] GetCrc32Bytes(int crc32)
-            {
-                return new byte[]
+                finally
                 {
-                    (byte)((crc32 >> 24) & 0xff),
-                    (byte)((crc32 >> 16) & 0xff),
-                    (byte)((crc32 >> 8) & 0xff),
-                    (byte)(crc32 & 0xff)
-                };
+                    ArrayPool<byte>.Shared.Return(buffer);
+                }
+
+                return unchecked((int)~state);
             }
 
-            /// <summary>
-            /// 获取 CRC32 数值的二进制数组。
-            /// </summary>
-            /// <param name="crc32">CRC32 数值。</param>
-            /// <param name="bytes">要存放结果的数组。</param>
-            public static void GetCrc32Bytes(int crc32, byte[] bytes)
+        /// <summary>
+        /// 将 CRC32 数值转换为四字节大端序数组。
+        /// </summary>
+        /// <param name="crc32">CRC-32 校验值。</param>
+        /// <returns>四字节大端序数组。</returns>
+        public static byte[] GetCrc32Bytes(int crc32)
             {
-                GetCrc32Bytes(crc32, bytes, 0);
+                byte[] result = new byte[sizeof(int)];
+                WriteBigEndian(crc32, result, 0);
+                return result;
             }
 
-            /// <summary>
-            /// 获取 CRC32 数值的二进制数组。
-            /// </summary>
-            /// <param name="crc32">CRC32 数值。</param>
-            /// <param name="bytes">要存放结果的数组。</param>
-            /// <param name="offset">CRC32 数值的二进制数组在结果数组内的起始位置。</param>
-            public static void GetCrc32Bytes(int crc32, byte[] bytes, int offset)
+        /// <summary>
+        /// 将 CRC32 数值以大端序写入目标数组起始位置。
+        /// </summary>
+        /// <param name="crc32">CRC-32 校验值。</param>
+        /// <param name="bytes">目标字节数组。</param>
+        public static void GetCrc32Bytes(int crc32, byte[] bytes)
+            {
+                WriteBigEndian(crc32, bytes, 0);
+            }
+
+        /// <summary>
+        /// 将 CRC32 数值以大端序写入目标数组指定位置。
+        /// </summary>
+        /// <param name="crc32">CRC-32 校验值。</param>
+        /// <param name="bytes">目标字节数组。</param>
+        /// <param name="offset">写入起始偏移。</param>
+        public static void GetCrc32Bytes(int crc32, byte[] bytes, int offset)
+            {
+                WriteBigEndian(crc32, bytes, offset);
+            }
+
+            private static void WriteBigEndian(int crc32, byte[] destination, int offset)
+            {
+                if (destination == null)
+                {
+                    throw new RFrameworkException("CRC32 destination bytes cannot be null.");
+                }
+
+                if (offset < 0 || offset > destination.Length - sizeof(int))
+                {
+                    throw new RFrameworkException("CRC32 destination offset is outside the array.");
+                }
+
+                uint value = unchecked((uint)crc32);
+                destination[offset] = (byte)(value >> 24);
+                destination[offset + 1] = (byte)(value >> 16);
+                destination[offset + 2] = (byte)(value >> 8);
+                destination[offset + 3] = (byte)value;
+            }
+
+            private static void ValidateSegment(byte[] bytes, int offset, int length)
             {
                 if (bytes == null)
                 {
-                    throw new RFrameworkException("Result is invalid.");
+                    throw new RFrameworkException("CRC32 source bytes cannot be null.");
                 }
 
-                if (offset < 0 || offset > bytes.Length - sizeof(int))
+                if (offset < 0 || length < 0 || offset > bytes.Length
+                    || length > bytes.Length - offset)
                 {
-                    throw new RFrameworkException("Offset or length is invalid.");
+                    throw new RFrameworkException("CRC32 source range is outside the array.");
                 }
-
-                bytes[offset] = (byte)((crc32 >> 24) & 0xff);
-                bytes[offset + 1] = (byte)((crc32 >> 16) & 0xff);
-                bytes[offset + 2] = (byte)((crc32 >> 8) & 0xff);
-                bytes[offset + 3] = (byte)(crc32 & 0xff);
             }
 
+            private static uint UpdateCrc32(
+                uint state, byte[] bytes, int offset, int length)
+            {
+                int end = offset + length;
+                for (int index = offset; index < end; index++)
+                {
+                    int tableIndex = (byte)(state ^ bytes[index]);
+                    state = Crc32Table[tableIndex] ^ (state >> 8);
+                }
+
+                return state;
+            }
+
+            private static uint[] CreateCrc32Table()
+            {
+                uint[] table = new uint[256];
+                for (int index = 0; index < table.Length; index++)
+                {
+                    uint remainder = (uint)index;
+                    for (int bit = 0; bit < 8; bit++)
+                    {
+                        remainder = (remainder & 1u) == 0u
+                            ? remainder >> 1
+                            : (remainder >> 1) ^ Crc32Polynomial;
+                    }
+
+                    table[index] = remainder;
+                }
+
+                return table;
+            }
         }
     }
 }

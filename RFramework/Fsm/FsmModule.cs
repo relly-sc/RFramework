@@ -38,7 +38,7 @@ namespace RFramework
         /// 获取框架模块优先级。
         /// 优先级 4：低于 Event（7）、Timer（6），确保 FSM 状态切换在事件分发之后执行。
         /// </summary>
-        internal override int Priority
+        internal override int Order
         {
             get { return 4; }
         }
@@ -84,7 +84,7 @@ namespace RFramework
         /// 模块轮询。统一驱动所有 FSM 实例的当前状态 Update。
         /// 使用双缓冲模式保证遍历中 FSM 的创建/销毁安全。
         /// </summary>
-        internal override void Update(float elapseSeconds, float realElapseSeconds)
+        internal override void Tick(float elapseSeconds, float realElapseSeconds)
         {
             List<Exception> errors = null;
 
@@ -148,7 +148,7 @@ namespace RFramework
         /// <summary>
         /// 关闭并清理 FSM 模块，销毁所有 FSM 实例。
         /// </summary>
-        internal override void Shutdown()
+        internal override void Stop()
         {
             HashSet<FsmBase> allFsms = new HashSet<FsmBase>(fsms);
             for (int i = 0; i < toAdd.Count; i++)

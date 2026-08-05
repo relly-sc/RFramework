@@ -76,7 +76,7 @@ namespace RFramework
         /// 获取框架模块优先级。
         /// UIModule Priority=30，在 Entity(25) 之后。
         /// </summary>
-        internal override int Priority
+        internal override int Order
         {
             get
             {
@@ -516,7 +516,7 @@ namespace RFramework
         /// <summary>
         /// 模块轮询更新。驱动所有已打开 UI 的 OnUpdate。
         /// </summary>
-        internal override void Update(float elapseSeconds, float realElapseSeconds)
+        internal override void Tick(float elapseSeconds, float realElapseSeconds)
         {
             for (int i = 0; i < windowStack.Count; i++)
             {
@@ -531,7 +531,7 @@ namespace RFramework
         /// <summary>
         /// 模块关闭。关闭所有 UI 并清理状态。
         /// </summary>
-        internal override void Shutdown()
+        internal override void Stop()
         {
             isShutdown = true;
             CloseAllUIForms();

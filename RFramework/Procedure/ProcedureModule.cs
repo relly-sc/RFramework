@@ -48,7 +48,7 @@ namespace RFramework
         /// 获取框架模块优先级。
         /// 优先级 3：低于 FsmModule（4），确保 FSM 状态切换的 Update 在此模块之前执行。
         /// </summary>
-        internal override int Priority
+        internal override int Order
         {
             get { return 3; }
         }
@@ -90,7 +90,7 @@ namespace RFramework
                 throw new RFrameworkException("Procedure states are invalid.");
             }
 
-            fsmModule = RFrameworkModuleEntry.GetModule<IFsmModule>();
+            fsmModule = RFrameworkModuleHost.Get<IFsmModule>();
 
             // 将 ProcedureStateBase[] 转换为 IFsmState[]
             IFsmState[] states = new IFsmState[procedures.Length];
@@ -151,14 +151,14 @@ namespace RFramework
         /// <summary>
         /// 模块轮询。无操作——FSM 的 Update 由 FsmModule 统一驱动。
         /// </summary>
-        internal override void Update(float elapseSeconds, float realElapseSeconds)
+        internal override void Tick(float elapseSeconds, float realElapseSeconds)
         {
         }
 
         /// <summary>
         /// 关闭并清理流程模块。
         /// </summary>
-        internal override void Shutdown()
+        internal override void Stop()
         {
             if (procedureFsm != null)
             {

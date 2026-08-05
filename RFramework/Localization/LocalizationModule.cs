@@ -22,7 +22,7 @@ namespace RFramework
 
         public int LoadedLanguageCount => languageDicts.Count;
 
-        internal override int Priority => 40;
+        internal override int Order => 40;
 
         public void SetHelper(ILocalizationHelper helper)
         {
@@ -254,11 +254,11 @@ namespace RFramework
                 && dict.ContainsKey(key);
         }
 
-        internal override void Update(float elapseSeconds, float realElapseSeconds)
+        internal override void Tick(float elapseSeconds, float realElapseSeconds)
         {
         }
 
-        internal override void Shutdown()
+        internal override void Stop()
         {
             if (localizationHelper != null)
             {
@@ -335,7 +335,7 @@ namespace RFramework
 
             try
             {
-                eventModule = RFrameworkModuleEntry.GetModule<IEventModule>();
+                eventModule = RFrameworkModuleHost.Get<IEventModule>();
             }
             catch
             {
