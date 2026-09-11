@@ -141,6 +141,7 @@ namespace RFramework
                 if (contractType == typeof(IProcedureModule)) return new ProcedureModule();
                 if (contractType == typeof(IResourceModule)) return new ResourceModule();
                 if (contractType == typeof(ISceneModule)) return new SceneModule();
+                if (contractType == typeof(IStorageModule)) return new StorageModule();
                 if (contractType == typeof(ITimerModule)) return new TimerModule();
                 if (contractType == typeof(IUIModule)) return new UIModule();
                 if (contractType == typeof(IWebRequestModule)) return new WebRequestModule();

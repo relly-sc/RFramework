@@ -25,6 +25,9 @@ namespace RFramework
         /// <summary>配置辅助器，封装具体格式解析和表对象查询。</summary>
         private IConfigHelper helper;
 
+        /// <summary>可选的配置数据保护器。</summary>
+        private IDataProtector dataProtector;
+
         /// <summary>事件模块引用，用于分发加载成功/失败事件。惰性获取，可能为 null。</summary>
         private IEventModule eventModule;
 
@@ -59,6 +62,12 @@ namespace RFramework
             this.helper = helper;
         }
 
+        /// <inheritdoc/>
+        public void SetDataProtector(IDataProtector protector)
+        {
+            dataProtector = protector;
+        }
+
         // ==================== 配置加载 ====================
 
         /// <summary>
@@ -69,6 +78,30 @@ namespace RFramework
         /// <typeparam name="T">配置行类型（如 ItemConfig）。</typeparam>
         /// <param name="configBytes">配置原始字节数据。</param>
         public void LoadConfig<T>(byte[] configBytes) where T : class
+        {
+            LoadConfigCore<T>(configBytes);
+        }
+
+        /// <inheritdoc/>
+        public void LoadConfig<T>(byte[] configBytes, ConfigProtectionContext context) where T : class
+        {
+            if (context.PayloadType != ConfigPayloadType.Single)
+            {
+                throw new RFrameworkException("Config protection context must describe a single table.");
+            }
+
+            byte[] plaintext = context.Unprotect(dataProtector, configBytes);
+            try
+            {
+                LoadConfigCore<T>(plaintext);
+            }
+            finally
+            {
+                ClearTemporaryPlaintext(configBytes, plaintext, context.Mode);
+            }
+        }
+
+        private void LoadConfigCore<T>(byte[] configBytes) where T : class
         {
             EnsureHelper();
 
@@ -159,6 +192,30 @@ namespace RFramework
         /// Helper 必须实现 IConfigBundleHelper，解析或提交任一步失败都会恢复旧缓存。
         /// </summary>
         public void LoadConfigBundle(byte[] configBytes)
+        {
+            LoadConfigBundleCore(configBytes);
+        }
+
+        /// <inheritdoc/>
+        public void LoadConfigBundle(byte[] configBytes, ConfigProtectionContext context)
+        {
+            if (context.PayloadType != ConfigPayloadType.Bundle)
+            {
+                throw new RFrameworkException("Config protection context must describe a bundle.");
+            }
+
+            byte[] plaintext = context.Unprotect(dataProtector, configBytes);
+            try
+            {
+                LoadConfigBundleCore(plaintext);
+            }
+            finally
+            {
+                ClearTemporaryPlaintext(configBytes, plaintext, context.Mode);
+            }
+        }
+
+        private void LoadConfigBundleCore(byte[] configBytes)
         {
             EnsureHelper();
             if (!(helper is IConfigBundleHelper bundleHelper))
@@ -512,6 +569,7 @@ namespace RFramework
             }
 
             helper = null;
+            dataProtector = null;
             eventModule = null;
         }
 
@@ -526,6 +584,19 @@ namespace RFramework
             {
                 throw new RFrameworkException(
                     "ConfigModule: Helper not set. Call SetHelper() before loading config.");
+            }
+        }
+
+        private static void ClearTemporaryPlaintext(
+            byte[] source,
+            byte[] plaintext,
+            ConfigProtectionMode mode)
+        {
+            if (mode == ConfigProtectionMode.EncryptedAndAuthenticated
+                && plaintext != null
+                && !ReferenceEquals(source, plaintext))
+            {
+                Array.Clear(plaintext, 0, plaintext.Length);
             }
         }
 

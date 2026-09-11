@@ -17,6 +17,12 @@ namespace RFramework
         void SetHelper(IConfigHelper helper);
 
         /// <summary>
+        /// 设置可选的数据保护器。传入 null 可关闭保护能力；明文加载不依赖该设置。
+        /// </summary>
+        /// <param name="protector">通用数据保护器。</param>
+        void SetDataProtector(IDataProtector protector);
+
+        /// <summary>
         /// 从字节数据加载配置表。具体 JSON、二进制或自定义格式由当前 IConfigHelper 决定。
         /// 内部通过 IConfigHelper.GetTableType 映射行类型→表类型，然后解析并缓存。
         /// 重复加载相同类型会覆盖旧数据。
@@ -25,12 +31,18 @@ namespace RFramework
         /// <param name="configBytes">配置原始字节数据。</param>
         void LoadConfig<T>(byte[] configBytes) where T : class;
 
+        /// <summary>按指定保护上下文还原并加载配置表。</summary>
+        void LoadConfig<T>(byte[] configBytes, ConfigProtectionContext context) where T : class;
+
         /// <summary>
         /// 从一个容器原子加载多张配置表。
         /// 同一行类型的多个分片由 Helper 合并；任一表失败时不修改现有缓存。
         /// </summary>
         /// <param name="configBytes">配置容器原始字节。</param>
         void LoadConfigBundle(byte[] configBytes);
+
+        /// <summary>按指定保护上下文还原并原子加载多表配置容器。</summary>
+        void LoadConfigBundle(byte[] configBytes, ConfigProtectionContext context);
 
         /// <summary>
         /// 从 JSON 字符串加载配置表。适用于运行时动态生成配置、编辑器预览等场景。

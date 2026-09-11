@@ -175,7 +175,7 @@ namespace RFramework
                 }
             }
 
-            private static void ValidateKey(byte[] key)
+            internal static void ValidateKey(byte[] key)
             {
                 if (key == null || key.Length != KeyLength)
                 {
@@ -203,7 +203,7 @@ namespace RFramework
                 }
             }
 
-            private static bool TagsMatch(byte[] expectedTag, byte[] data, int tagOffset)
+            internal static bool TagsMatch(byte[] expectedTag, byte[] data, int tagOffset)
             {
                 int difference = 0;
                 for (int i = 0; i < expectedTag.Length; i++)
