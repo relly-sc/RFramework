@@ -55,6 +55,7 @@ RFramework/
 | `IWebRequestModule` | 请求队列、优先级和并发控制 | `IWebRequestHelper` |
 | `IDownloadModule` | 下载、断点续传、校验和归档解压 | Web 请求模块、可选 `IArchiveHelper` |
 | `IConfigModule` | 配置解析、缓存、查询和可选保护 | `IConfigHelper`、可选 `IDataProtector` |
+| `ISettingModule` | 少量应用设置的键值读写与保存，不承载业务存档 | `ISettingHelper`，Unity Runtime 默认使用 PlayerPrefs |
 | `ILocalizationModule` | 语言包解析、查询和切换 | `ILocalizationHelper` |
 | `IStorageModule` | 多槽位存档、原子提交、备份和迁移 | `IStorageHelper`、`IStorageSerializer`、可选 `IDataProtector` |
 
