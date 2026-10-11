@@ -129,6 +129,7 @@ namespace RFramework
 
             try
             {
+                if (contractType == typeof(IAdvertisementModule)) return new AdvertisementModule();
                 if (contractType == typeof(IAudioModule)) return new AudioModule();
                 if (contractType == typeof(IConfigModule)) return new ConfigModule();
                 if (contractType == typeof(IDownloadModule)) return new DownloadModule();

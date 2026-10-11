@@ -40,11 +40,36 @@ namespace RFramework
             dataProtector = value;
         }
 
-        public async Task<StorageResult> SaveAsync<T>(
+        public Task<StorageResult> SaveAsync<T>(
             string slotName,
             T data,
             StorageOptions options = null,
             CancellationToken ct = default(CancellationToken))
+        {
+            if (StorageSlotNames.IsReserved(slotName))
+            {
+                return Task.FromResult(StorageResult.Failure(
+                    slotName,
+                    StorageExceptionReason.InvalidArgument,
+                    "The automatic save slot can only be written through SaveAutoAsync."));
+            }
+
+            return SaveCoreAsync(slotName, data, options, ct);
+        }
+
+        public Task<StorageResult> SaveAutoAsync<T>(
+            T data,
+            StorageOptions options = null,
+            CancellationToken ct = default(CancellationToken))
+        {
+            return SaveCoreAsync(StorageSlotNames.AutoSave, data, options, ct);
+        }
+
+        private async Task<StorageResult> SaveCoreAsync<T>(
+            string slotName,
+            T data,
+            StorageOptions options,
+            CancellationToken ct)
         {
             if (!TryValidate(slotName, options, out StorageOptions effective, out StorageResult failure))
             {

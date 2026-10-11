@@ -19,6 +19,11 @@ namespace RFramework
             string slotName, T data, StorageOptions options = null,
             CancellationToken ct = default(CancellationToken));
 
+        /// <summary>写入固定的自动存档槽位；普通 SaveAsync 不能覆盖该槽位。</summary>
+        Task<StorageResult> SaveAutoAsync<T>(
+            T data, StorageOptions options = null,
+            CancellationToken ct = default(CancellationToken));
+
         /// <summary>加载指定槽位，并按需迁移旧业务版本。</summary>
         Task<StorageLoadResult<T>> LoadAsync<T>(
             string slotName, StorageOptions options = null,
