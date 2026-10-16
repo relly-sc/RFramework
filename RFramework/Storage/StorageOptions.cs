@@ -38,7 +38,8 @@ namespace RFramework
         /// <summary>覆盖正式存档时是否保留上一份备份。</summary>
         public bool CreateBackup { get; set; } = true;
 
-        /// <summary>主存档加载失败时是否尝试读取备份。</summary>
+        /// <summary>主存档缺失或损坏时是否尝试读取备份；取消、密钥不可用、模式不匹配或迁移失败不自动回退。</summary>
+        /// <remarks>LoadBackupAsync 始终只读备份，不使用此选项。业务校验失败后由调用方决定是否显式读取备份。</remarks>
         public bool RecoverFromBackup { get; set; } = true;
     }
 }

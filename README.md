@@ -119,6 +119,16 @@ subscriptions.Dispose();
 
 除明确标注的 API（例如 `FireAsync`）外，不应假设模块可被多个线程并发调用。
 
+## 存档读取与恢复
+
+`IStorageModule.LoadAsync<T>()` 的成功结果不包含游戏业务规则校验。业务应先校验临时 DTO，
+通过后才替换当前对局；若数据非法，可显式调用 `LoadBackupAsync<T>()` 并再次校验备份。
+备份接口使用原槽位名称和相同的槽位锁，复用认证、解压、反序列化与迁移，
+忽略 `RecoverFromBackup`、不回退主档、不修改任何文件；成功时 `RecoveredFromBackup = true`。
+
+自动恢复不处理取消、密钥不可用、保护或压缩模式不匹配、版本过新及迁移失败。
+版本过新会在反序列化前以 `MigrationFailed` 返回，应停止并保留原件，避免采用旧进度后覆盖新档。
+
 ## 数据保护边界
 
 `Security` 提供通用能力，不承诺不可破解：

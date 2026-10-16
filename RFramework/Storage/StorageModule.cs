@@ -178,11 +178,30 @@ namespace RFramework
             }
         }
 
-        public async Task<StorageLoadResult<T>> LoadAsync<T>(
+        public Task<StorageLoadResult<T>> LoadAsync<T>(
             string slotName,
             StorageOptions options = null,
             IStorageMigration<T> migration = null,
             CancellationToken ct = default(CancellationToken))
+        {
+            return LoadWithLockAsync<T>(slotName, false, options, migration, ct);
+        }
+
+        public Task<StorageLoadResult<T>> LoadBackupAsync<T>(
+            string slotName,
+            StorageOptions options = null,
+            IStorageMigration<T> migration = null,
+            CancellationToken ct = default(CancellationToken))
+        {
+            return LoadWithLockAsync<T>(slotName, true, options, migration, ct);
+        }
+
+        private async Task<StorageLoadResult<T>> LoadWithLockAsync<T>(
+            string slotName,
+            bool backupOnly,
+            StorageOptions options,
+            IStorageMigration<T> migration,
+            CancellationToken ct)
         {
             if (!TryValidate(slotName, options, out StorageOptions effective, out StorageResult failure))
             {
@@ -206,9 +225,12 @@ namespace RFramework
                 try
                 {
                     StorageLoadResult<T> primary = await LoadCoreAsync<T>(
-                        slotName, false, effective, migration, linked.Token).ConfigureAwait(false);
-                    if (primary.Succeeded || !effective.RecoverFromBackup
+                        slotName, backupOnly, effective, migration, linked.Token).ConfigureAwait(false);
+                    if (backupOnly || primary.Succeeded || !effective.RecoverFromBackup
                         || primary.Reason == StorageExceptionReason.Cancelled
+                        // 配置或版本问题不是主档损坏，不能静默采用较旧的进度。
+                        || primary.Reason == StorageExceptionReason.KeyUnavailable
+                        || primary.Reason == StorageExceptionReason.MigrationFailed
                         || primary.Reason == StorageExceptionReason.ProtectionModeMismatch
                         || primary.Reason == StorageExceptionReason.CompressionModeMismatch)
                     {
@@ -217,7 +239,8 @@ namespace RFramework
 
                     StorageLoadResult<T> backup = await LoadCoreAsync<T>(
                         slotName, true, effective, migration, linked.Token).ConfigureAwait(false);
-                    return backup.Succeeded ? backup : primary;
+                    return backup.Succeeded || backup.Reason == StorageExceptionReason.Cancelled
+                        ? backup : primary;
                 }
                 finally
                 {
@@ -324,6 +347,12 @@ namespace RFramework
 
             try
             {
+                if (ct.IsCancellationRequested)
+                {
+                    return StorageLoadResult<T>.Failure(slotName,
+                        StorageExceptionReason.Cancelled, "Storage load was cancelled.");
+                }
+
                 bool protectedPayload = ProtectedDataHeader.HasMagic(payload);
                 if (options.ProtectionMode == StorageProtectionMode.None && protectedPayload)
                 {
@@ -405,6 +434,14 @@ namespace RFramework
                 T data;
                 try
                 {
+                    // 先识别版本过新，避免旧序列化器把不兼容数据误报为损坏并回退备份。
+                    if (storedVersion > options.Version)
+                    {
+                        return StorageLoadResult<T>.Failure(slotName,
+                            StorageExceptionReason.MigrationFailed,
+                            "Storage version is newer than the current application supports.");
+                    }
+
                     data = RequireSerializer().Deserialize<T>(serialized);
                 }
                 catch (Exception exception)
@@ -415,13 +452,6 @@ namespace RFramework
                 finally
                 {
                     Clear(serialized);
-                }
-
-                if (storedVersion > options.Version)
-                {
-                    return StorageLoadResult<T>.Failure(slotName,
-                        StorageExceptionReason.MigrationFailed,
-                        "Storage version is newer than the current application supports.");
                 }
 
                 if (storedVersion < options.Version)
@@ -442,6 +472,12 @@ namespace RFramework
                         return LoadFail<T>(slotName, StorageExceptionReason.MigrationFailed,
                             "Storage migration failed.", exception);
                     }
+                }
+
+                if (ct.IsCancellationRequested)
+                {
+                    return StorageLoadResult<T>.Failure(slotName,
+                        StorageExceptionReason.Cancelled, "Storage load was cancelled.");
                 }
 
                 return StorageLoadResult<T>.Success(

@@ -30,6 +30,13 @@ namespace RFramework
             IStorageMigration<T> migration = null,
             CancellationToken ct = default(CancellationToken));
 
+        /// <summary>只加载指定槽位的备份，包含认证、解压和迁移；不回退主档，不改写任何文件。</summary>
+        /// <remarks>忽略 RecoverFromBackup；成功结果的 RecoveredFromBackup 为 true，业务有效性仍由调用方校验。</remarks>
+        Task<StorageLoadResult<T>> LoadBackupAsync<T>(
+            string slotName, StorageOptions options = null,
+            IStorageMigration<T> migration = null,
+            CancellationToken ct = default(CancellationToken));
+
         /// <summary>删除指定槽位及其备份。</summary>
         Task<StorageResult> DeleteAsync(
             string slotName, CancellationToken ct = default(CancellationToken));

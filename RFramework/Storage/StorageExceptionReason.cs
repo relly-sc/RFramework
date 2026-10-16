@@ -17,7 +17,7 @@ namespace RFramework
         FormatInvalid = 5,
         /// <summary>序列化或反序列化失败。</summary>
         SerializationFailed = 6,
-        /// <summary>业务版本迁移失败或缺少迁移器。</summary>
+        /// <summary>存档版本过新、业务版本迁移失败或缺少迁移器；不自动回退备份。</summary>
         MigrationFailed = 7,
         /// <summary>文件系统操作失败。</summary>
         IoFailure = 8,
