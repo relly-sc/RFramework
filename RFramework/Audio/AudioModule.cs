@@ -53,6 +53,8 @@ namespace RFramework
         /// </summary>
         private float currentBgmVolume = 1f;
 
+        private float bgmVolume = 1f;
+
         /// <summary>
         /// BGM 是否处于暂停状态。
         /// </summary>
@@ -69,7 +71,22 @@ namespace RFramework
         private int bgmHandleId;
 
         /// <inheritdoc/>
-        public float BgmVolume { get; set; } = 1f;
+        public float BgmVolume
+        {
+            get { return bgmVolume; }
+            set
+            {
+                if (float.IsNaN(value))
+                {
+                    throw new RFrameworkException("BGM volume cannot be NaN.");
+                }
+
+                float clamped = Math.Clamp(value, 0f, 1f);
+                if (bgmVolume == clamped) return;
+                bgmVolume = clamped;
+                ApplyBgmVolume();
+            }
+        }
 
         /// <inheritdoc/>
         public float SfxVolume { get; set; } = 1f;
@@ -84,7 +101,7 @@ namespace RFramework
             set
             {
                 muted = value;
-                ApplyMuteState();
+                ApplyBgmVolume();
             }
         }
 
@@ -431,13 +448,13 @@ namespace RFramework
         }
 
         /// <summary>
-        /// 应用静音状态到当前 BGM（静音时直接设音量为 0，取消静音时恢复）。
+        /// 结合播放倍率、分类音量和静音状态，更新 BGM 音量。
         /// </summary>
-        private void ApplyMuteState()
+        private void ApplyBgmVolume()
         {
-            if (currentBgmAssetName != null)
+            if (audioHelper != null)
             {
-                audioHelper.SetBgmVolume(muted ? 0f : GetFinalVolume(currentBgmVolume, BgmVolume));
+                audioHelper.SetBgmVolume(GetFinalVolume(currentBgmVolume, BgmVolume));
             }
         }
 

@@ -11,7 +11,7 @@ namespace RFramework
     public interface IAudioModule
     {
         /// <summary>
-        /// BGM 音量（0~1）。
+        /// BGM 分类音量，限制到 0~1，拒绝 NaN；立即作用于当前 BGM，并保留播放倍率及静音状态。
         /// </summary>
         float BgmVolume { get; set; }
 

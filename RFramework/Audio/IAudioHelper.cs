@@ -37,7 +37,7 @@ namespace RFramework
         void ResumeBgm();
 
         /// <summary>
-        /// 直接设置 BGM AudioSource 音量（静音切换时使用）。
+        /// 更新 BGM 目标音量（分类音量或静音切换时使用）；Helper 应结合当前淡入淡出倍率实时应用。
         /// </summary>
         /// <param name="volume">音量值。</param>
         void SetBgmVolume(float volume);
